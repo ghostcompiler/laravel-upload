@@ -1,0 +1,41 @@
+{
+    "name": "ghostcompiler/uploads-manager",
+    "description": "Manage your uploads easily",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0"
+    },
+    "suggest": {
+        "ext-gd": "Required for image compression and AVIF conversion support.",
+        "laravel/framework": "Required in the host application to provide Eloquent, routing, console, HTTP, and filesystem integration."
+    },
+    "autoload": {
+        "psr-4": {
+            "GhostCompiler\\UploadsManager\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "GhostCompiler\\UploadsManager\\UploadsManagerServiceProvider"
+            ],
+            "aliases": {
+                "Uploads": "GhostCompiler\\UploadsManager\\Facades\\Uploads"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "autoload-dev": {
+        "psr-4": {
+            "GhostCompiler\\UploadsManager\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Ghost Compiler"
+        }
+    ]
+}

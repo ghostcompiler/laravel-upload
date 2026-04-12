@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('uploads_manager_links', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('upload_id')->constrained('uploads_manager_uploads')->cascadeOnDelete();
+            $table->string('token', 64)->unique();
+            $table->timestamp('expires_at')->nullable();
+            $table->timestamp('last_accessed_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('uploads_manager_links');
+    }
+};
