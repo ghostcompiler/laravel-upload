@@ -1,10 +1,14 @@
 # Uploads Manager
 
-![Uploads Manager Logo](assets/logo/logo.png)
+<p align="center">
+  <img src="assets/logo/logo.png" alt="Uploads Manager Logo" width="180">
+</p>
 
-![Laravel](https://img.shields.io/badge/Laravel-9%20to%2013-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
-![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?style=for-the-badge&logo=php&logoColor=white)
-![Laravel Storage](https://img.shields.io/badge/Built%20With-Laravel%20Storage-0F172A?style=for-the-badge)
+<p align="center">
+  <img src="https://img.shields.io/badge/Laravel-9%20to%2013-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel">
+  <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP">
+  <img src="https://img.shields.io/badge/Built%20With-Laravel%20Storage-0F172A?style=for-the-badge" alt="Laravel Storage">
+</p>
 
 > A Laravel package for upload storage, secure file URLs, model-based URL fields, inline preview support, file removal, and optional image optimization to AVIF.
 
