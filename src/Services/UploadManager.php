@@ -3,21 +3,23 @@
 namespace GhostCompiler\UploadsManager\Services;
 
 use GhostCompiler\UploadsManager\Contracts\ResolvesUploadUrls;
+use GhostCompiler\UploadsManager\Exceptions\UploadsManagerException;
 use GhostCompiler\UploadsManager\Models\Upload;
 use GhostCompiler\UploadsManager\Models\UploadLink;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 use RuntimeException;
 
 class UploadManager implements ResolvesUploadUrls
 {
-    public function upload(string $type, UploadedFile $file): Upload
+    public function upload(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): Upload
     {
-        $visibility = $this->normalizeVisibility($type);
+        [$path, $file] = $this->parseUploadArguments($pathOrFile, $file);
+        $visibility = $this->defaultVisibility();
         $disk = $this->disk();
-        $directory = $this->directoryFor($visibility);
+        $directory = $this->directoryFor($path);
         $prepared = $this->prepareFileForStorage($file);
         $path = "{$directory}/{$prepared['name']}";
         $stream = fopen($prepared['real_path'], 'rb');
@@ -92,6 +94,11 @@ class UploadManager implements ResolvesUploadUrls
         return (bool) $upload->delete();
     }
 
+    public function delete(Upload|int|null $upload): bool
+    {
+        return $this->remove($upload);
+    }
+
     public function urlFromId(?int $id, ?int $expiry = null): ?string
     {
         $upload = $this->find($id);
@@ -103,15 +110,27 @@ class UploadManager implements ResolvesUploadUrls
         return $this->createLink($upload, $expiry)->url();
     }
 
-    protected function normalizeVisibility(string $type): string
+    protected function parseUploadArguments(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): array
     {
-        $visibility = strtolower(trim($type));
-
-        if (! in_array($visibility, ['public', 'private'], true)) {
-            throw new InvalidArgumentException('Upload type must be either public or private.');
+        if ($pathOrFile instanceof UploadedFile) {
+            return [null, $pathOrFile];
         }
 
-        return $visibility;
+        if (! $file instanceof UploadedFile) {
+            $message = 'UploadsManager: A valid uploaded file is required.';
+            Log::error($message);
+
+            throw new UploadsManagerException($message);
+        }
+
+        return [$pathOrFile, $file];
+    }
+
+    protected function defaultVisibility(): string
+    {
+        $visibility = strtolower(trim((string) config('uploads-manager.defaults.type', 'private')));
+
+        return in_array($visibility, ['public', 'private'], true) ? $visibility : 'private';
     }
 
     protected function disk(): string
@@ -119,12 +138,12 @@ class UploadManager implements ResolvesUploadUrls
         return (string) config('uploads-manager.disk', config('filesystems.default', 'local'));
     }
 
-    protected function directoryFor(string $visibility): string
+    protected function directoryFor(?string $path = null): string
     {
         $basePath = trim((string) config('uploads-manager.base_path', 'UploadsManager'), '/');
-        $directory = trim((string) config("uploads-manager.paths.{$visibility}", $visibility), '/');
+        $directory = trim((string) $path, '/');
 
-        return "{$basePath}/{$directory}";
+        return $directory !== '' ? "{$basePath}/{$directory}" : $basePath;
     }
 
     protected function generateFilename(UploadedFile $file): string
@@ -138,61 +157,62 @@ class UploadManager implements ResolvesUploadUrls
     protected function prepareFileForStorage(UploadedFile $file): array
     {
         if (! $this->shouldCompressImages() || ! $this->isCompressibleImage($file)) {
-            $name = $this->generateFilename($file);
-            $size = filesize($file->getRealPath()) ?: $file->getSize();
-
-            return [
-                'name' => $name,
-                'download_name' => $file->getClientOriginalName(),
-                'real_path' => $file->getRealPath(),
-                'mime_type' => $file->getClientMimeType(),
-                'extension' => $file->getClientOriginalExtension(),
-                'size' => $size,
-                'temporary' => false,
-                'compression' => [
-                    'enabled' => false,
-                    'applied' => false,
-                ],
-            ];
+            return $this->prepareOriginalFileForStorage($file);
         }
 
-        $converted = $this->convertImageToAvif($file);
+        $converted = $this->convertOptimizedImage($file);
 
         if ($converted === null) {
-            $name = $this->generateFilename($file);
-            $size = filesize($file->getRealPath()) ?: $file->getSize();
-
-            return [
-                'name' => $name,
-                'download_name' => $file->getClientOriginalName(),
-                'real_path' => $file->getRealPath(),
-                'mime_type' => $file->getClientMimeType(),
-                'extension' => $file->getClientOriginalExtension(),
-                'size' => $size,
-                'temporary' => false,
-                'compression' => [
-                    'enabled' => true,
-                    'applied' => false,
-                    'fallback' => true,
-                ],
-            ];
+            return $this->prepareOriginalFileForStorage($file, [
+                'enabled' => true,
+                'applied' => false,
+                'fallback' => true,
+            ]);
         }
 
         $downloadBaseName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $extension = $converted['extension'];
 
         return [
-            'name' => Str::uuid()->toString().'.avif',
-            'download_name' => $downloadBaseName !== '' ? "{$downloadBaseName}.avif" : Str::uuid()->toString().'.avif',
-            'real_path' => $converted,
-            'mime_type' => 'image/avif',
-            'extension' => 'avif',
-            'size' => filesize($converted) ?: $file->getSize(),
+            'name' => Str::uuid()->toString().'.'.$extension,
+            'download_name' => $downloadBaseName !== '' ? "{$downloadBaseName}.{$extension}" : Str::uuid()->toString().'.'.$extension,
+            'real_path' => $converted['path'],
+            'mime_type' => $converted['mime_type'],
+            'extension' => $extension,
+            'size' => filesize($converted['path']) ?: $file->getSize(),
             'temporary' => true,
-            'compression' => [
+            'compression' => $converted['compression'] + [
                 'enabled' => true,
                 'applied' => true,
                 'quality' => $this->compressionQuality(),
-                'converted_to' => 'avif',
+            ],
+        ];
+    }
+
+    protected function prepareOriginalFileForStorage(UploadedFile $file, array $compression = []): array
+    {
+        $realPath = $file->getRealPath();
+
+        if (! is_string($realPath) || trim($realPath) === '' || ! is_file($realPath)) {
+            $message = 'UploadsManager: Unable to read the uploaded file from its temporary path.';
+            Log::error($message);
+
+            throw new UploadsManagerException($message);
+        }
+
+        $size = filesize($realPath) ?: $file->getSize();
+
+        return [
+            'name' => $this->generateFilename($file),
+            'download_name' => $file->getClientOriginalName(),
+            'real_path' => $realPath,
+            'mime_type' => $file->getClientMimeType(),
+            'extension' => $file->getClientOriginalExtension(),
+            'size' => $size,
+            'temporary' => false,
+            'compression' => $compression + [
+                'enabled' => false,
+                'applied' => false,
             ],
         ];
     }
@@ -218,12 +238,62 @@ class UploadManager implements ResolvesUploadUrls
         ], true);
     }
 
-    protected function convertImageToAvif(UploadedFile $file): ?string
+    protected function convertOptimizedImage(UploadedFile $file): ?array
+    {
+        if (! (bool) config('uploads-manager.image_optimization.convert_to_avif', true)) {
+            $converted = $this->convertImageToWebp($file);
+
+            if ($converted === null) {
+                Log::warning('UploadsManager: Image optimization skipped. WEBP conversion is unavailable. '.$this->webpSupportMessage());
+            }
+
+            return $converted;
+        }
+
+        $converted = $this->convertImageToAvif($file);
+
+        if ($converted !== null) {
+            return $converted;
+        }
+
+        $converted = $this->convertImageToWebp($file);
+
+        if ($converted !== null) {
+            Log::warning('UploadsManager: AVIF conversion unavailable. Falling back to WEBP.');
+
+            return $converted;
+        }
+
+        Log::warning('UploadsManager: Image optimization skipped. AVIF and WEBP conversion are unavailable. '.$this->avifSupportMessage().' '.$this->webpSupportMessage());
+
+        return null;
+    }
+
+    protected function convertImageToAvif(UploadedFile $file): ?array
     {
         if (! (bool) config('uploads-manager.image_optimization.convert_to_avif', true)) {
             return null;
         }
 
+        $converted = $this->convertImageToAvifUsingGd($file);
+
+        if ($converted !== null) {
+            return $converted;
+        }
+
+        $converted = $this->convertImageToAvifUsingImagick($file);
+
+        if ($converted !== null) {
+            return $converted;
+        }
+
+        Log::warning('UploadsManager: AVIF conversion is unavailable. '.$this->avifSupportMessage());
+
+        return null;
+    }
+
+    protected function convertImageToAvifUsingGd(UploadedFile $file): ?array
+    {
         if (! function_exists('imageavif')) {
             return null;
         }
@@ -234,10 +304,16 @@ class UploadManager implements ResolvesUploadUrls
             return null;
         }
 
+        $dimensions = $this->resizeGdImageResource($source);
+        $source = $dimensions['resource'];
+
         $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-avif-');
 
         if ($temporaryFile === false) {
             imagedestroy($source);
+
+            $message = 'UploadsManager: Unable to create a temporary file for AVIF conversion.';
+            Log::error($message);
 
             return null;
         }
@@ -256,10 +332,231 @@ class UploadManager implements ResolvesUploadUrls
         if (! $saved || ! is_file($avifPath)) {
             @unlink($avifPath);
 
+            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image.';
+            Log::error($message);
+
             return null;
         }
 
-        return $avifPath;
+        return [
+            'path' => $avifPath,
+            'mime_type' => 'image/avif',
+            'extension' => 'avif',
+            'compression' => [
+                'converted_to' => 'avif',
+                'driver' => 'gd',
+                'resized' => $dimensions['resized'],
+                'original_width' => $dimensions['original_width'],
+                'original_height' => $dimensions['original_height'],
+                'width' => $dimensions['width'],
+                'height' => $dimensions['height'],
+            ],
+        ];
+    }
+
+    protected function convertImageToAvifUsingImagick(UploadedFile $file): ?array
+    {
+        if (! class_exists(\Imagick::class)) {
+            return null;
+        }
+
+        if (! $this->imagickSupportsAvif()) {
+            return null;
+        }
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-avif-');
+
+        if ($temporaryFile === false) {
+            $message = 'UploadsManager: Unable to create a temporary file for AVIF conversion.';
+            Log::error($message);
+
+            return null;
+        }
+
+        $avifPath = $temporaryFile.'.avif';
+        @unlink($temporaryFile);
+
+        try {
+            $imagick = new \Imagick();
+            $imagick->readImage($file->getRealPath());
+            $dimensions = $this->resizeImagickImage($imagick);
+            $imagick->setImageFormat('AVIF');
+            $imagick->setImageCompressionQuality($this->compressionQuality());
+            $imagick->writeImage($avifPath);
+            $imagick->clear();
+            $imagick->destroy();
+        } catch (\Throwable $exception) {
+            @unlink($avifPath);
+
+            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
+            Log::error($message);
+
+            return null;
+        }
+
+        if (! is_file($avifPath)) {
+            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image with Imagick.';
+            Log::error($message);
+
+            return null;
+        }
+
+        return [
+            'path' => $avifPath,
+            'mime_type' => 'image/avif',
+            'extension' => 'avif',
+            'compression' => [
+                'converted_to' => 'avif',
+                'driver' => 'imagick',
+                'resized' => $dimensions['resized'] ?? false,
+                'original_width' => $dimensions['original_width'] ?? null,
+                'original_height' => $dimensions['original_height'] ?? null,
+                'width' => $dimensions['width'] ?? null,
+                'height' => $dimensions['height'] ?? null,
+            ],
+        ];
+    }
+
+    protected function convertImageToWebp(UploadedFile $file): ?array
+    {
+        $converted = $this->convertImageToWebpUsingGd($file);
+
+        if ($converted !== null) {
+            return $converted;
+        }
+
+        $converted = $this->convertImageToWebpUsingImagick($file);
+
+        if ($converted !== null) {
+            return $converted;
+        }
+
+        return null;
+    }
+
+    protected function convertImageToWebpUsingGd(UploadedFile $file): ?array
+    {
+        if (! function_exists('imagewebp')) {
+            return null;
+        }
+
+        $source = $this->createImageResource($file);
+
+        if (! $source) {
+            return null;
+        }
+
+        $dimensions = $this->resizeGdImageResource($source);
+        $source = $dimensions['resource'];
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-webp-');
+
+        if ($temporaryFile === false) {
+            imagedestroy($source);
+
+            $message = 'UploadsManager: Unable to create a temporary file for WEBP conversion.';
+            Log::error($message);
+
+            return null;
+        }
+
+        $webpPath = $temporaryFile.'.webp';
+        @unlink($temporaryFile);
+
+        imagepalettetotruecolor($source);
+        imagealphablending($source, true);
+        imagesavealpha($source, true);
+
+        $saved = imagewebp($source, $webpPath, $this->compressionQuality());
+
+        imagedestroy($source);
+
+        if (! $saved || ! is_file($webpPath)) {
+            @unlink($webpPath);
+
+            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image.';
+            Log::error($message);
+
+            return null;
+        }
+
+        return [
+            'path' => $webpPath,
+            'mime_type' => 'image/webp',
+            'extension' => 'webp',
+            'compression' => [
+                'converted_to' => 'webp',
+                'driver' => 'gd',
+                'resized' => $dimensions['resized'],
+                'original_width' => $dimensions['original_width'],
+                'original_height' => $dimensions['original_height'],
+                'width' => $dimensions['width'],
+                'height' => $dimensions['height'],
+            ],
+        ];
+    }
+
+    protected function convertImageToWebpUsingImagick(UploadedFile $file): ?array
+    {
+        if (! class_exists(\Imagick::class)) {
+            return null;
+        }
+
+        if (! $this->imagickSupportsWebp()) {
+            return null;
+        }
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-webp-');
+
+        if ($temporaryFile === false) {
+            $message = 'UploadsManager: Unable to create a temporary file for WEBP conversion.';
+            Log::error($message);
+
+            return null;
+        }
+
+        $webpPath = $temporaryFile.'.webp';
+        @unlink($temporaryFile);
+
+        try {
+            $imagick = new \Imagick();
+            $imagick->readImage($file->getRealPath());
+            $dimensions = $this->resizeImagickImage($imagick);
+            $imagick->setImageFormat('WEBP');
+            $imagick->setImageCompressionQuality($this->compressionQuality());
+            $imagick->writeImage($webpPath);
+            $imagick->clear();
+            $imagick->destroy();
+        } catch (\Throwable $exception) {
+            @unlink($webpPath);
+
+            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
+            Log::error($message);
+
+            return null;
+        }
+
+        if (! is_file($webpPath)) {
+            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image with Imagick.';
+            Log::error($message);
+
+            return null;
+        }
+
+        return [
+            'path' => $webpPath,
+            'mime_type' => 'image/webp',
+            'extension' => 'webp',
+            'compression' => [
+                'converted_to' => 'webp',
+                'driver' => 'imagick',
+                'resized' => $dimensions['resized'] ?? false,
+                'original_width' => $dimensions['original_width'] ?? null,
+                'original_height' => $dimensions['original_height'] ?? null,
+                'width' => $dimensions['width'] ?? null,
+                'height' => $dimensions['height'] ?? null,
+            ],
+        ];
     }
 
     protected function createImageResource(UploadedFile $file): mixed
@@ -273,6 +570,213 @@ class UploadManager implements ResolvesUploadUrls
             'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($path) : null,
             default => null,
         };
+    }
+
+    protected function imageResourceFailureMessage(UploadedFile $file): string
+    {
+        $mimeType = $file->getMimeType() ?: $file->getClientMimeType();
+
+        return match ($mimeType) {
+            'image/jpeg' => function_exists('imagecreatefromjpeg')
+                ? 'AVIF conversion failed: could not read the JPEG image.'
+                : 'PHP image support not installed: GD JPEG loader missing (imagecreatefromjpeg).',
+            'image/png' => function_exists('imagecreatefrompng')
+                ? 'AVIF conversion failed: could not read the PNG image.'
+                : 'PHP image support not installed: GD PNG loader missing (imagecreatefrompng).',
+            'image/webp' => function_exists('imagecreatefromwebp')
+                ? 'AVIF conversion failed: could not read the WEBP image.'
+                : 'PHP image support not installed: GD WEBP loader missing (imagecreatefromwebp).',
+            default => sprintf(
+                'AVIF conversion failed: unsupported source mime type [%s].',
+                $mimeType ?: 'unknown'
+            ),
+        };
+    }
+
+    protected function imagickSupportsAvif(): bool
+    {
+        if (! class_exists(\Imagick::class)) {
+            return false;
+        }
+
+        try {
+            $formats = \Imagick::queryFormats('AVIF');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $formats !== false && $formats !== [];
+    }
+
+    protected function imagickSupportsWebp(): bool
+    {
+        if (! class_exists(\Imagick::class)) {
+            return false;
+        }
+
+        try {
+            $formats = \Imagick::queryFormats('WEBP');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $formats !== false && $formats !== [];
+    }
+
+    protected function resizeGdImageResource(mixed $source): array
+    {
+        $originalWidth = imagesx($source);
+        $originalHeight = imagesy($source);
+        [$targetWidth, $targetHeight] = $this->targetImageDimensions($originalWidth, $originalHeight);
+
+        if ($targetWidth === $originalWidth && $targetHeight === $originalHeight) {
+            return [
+                'resource' => $source,
+                'resized' => false,
+                'original_width' => $originalWidth,
+                'original_height' => $originalHeight,
+                'width' => $originalWidth,
+                'height' => $originalHeight,
+            ];
+        }
+
+        $resized = imagecreatetruecolor($targetWidth, $targetHeight);
+
+        if ($resized === false) {
+            return [
+                'resource' => $source,
+                'resized' => false,
+                'original_width' => $originalWidth,
+                'original_height' => $originalHeight,
+                'width' => $originalWidth,
+                'height' => $originalHeight,
+            ];
+        }
+
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
+        $transparent = imagecolorallocatealpha($resized, 0, 0, 0, 127);
+        imagefill($resized, 0, 0, $transparent);
+
+        imagecopyresampled(
+            $resized,
+            $source,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $originalWidth,
+            $originalHeight
+        );
+
+        imagedestroy($source);
+
+        return [
+            'resource' => $resized,
+            'resized' => true,
+            'original_width' => $originalWidth,
+            'original_height' => $originalHeight,
+            'width' => $targetWidth,
+            'height' => $targetHeight,
+        ];
+    }
+
+    protected function resizeImagickImage(\Imagick $imagick): array
+    {
+        $originalWidth = $imagick->getImageWidth();
+        $originalHeight = $imagick->getImageHeight();
+        [$targetWidth, $targetHeight] = $this->targetImageDimensions($originalWidth, $originalHeight);
+
+        if ($targetWidth !== $originalWidth || $targetHeight !== $originalHeight) {
+            $imagick->thumbnailImage($targetWidth, $targetHeight, true, false);
+        }
+
+        return [
+            'resized' => $targetWidth !== $originalWidth || $targetHeight !== $originalHeight,
+            'original_width' => $originalWidth,
+            'original_height' => $originalHeight,
+            'width' => $targetWidth,
+            'height' => $targetHeight,
+        ];
+    }
+
+    protected function targetImageDimensions(int $width, int $height): array
+    {
+        $maxWidth = $this->maxResizeWidth();
+        $maxHeight = $this->maxResizeHeight();
+
+        if ($width <= 0 || $height <= 0) {
+            return [$width, $height];
+        }
+
+        if (! $maxWidth && ! $maxHeight) {
+            return [$width, $height];
+        }
+
+        $widthRatio = $maxWidth ? $maxWidth / $width : null;
+        $heightRatio = $maxHeight ? $maxHeight / $height : null;
+
+        $ratio = match (true) {
+            $widthRatio !== null && $heightRatio !== null => min($widthRatio, $heightRatio, 1),
+            $widthRatio !== null => min($widthRatio, 1),
+            $heightRatio !== null => min($heightRatio, 1),
+            default => 1,
+        };
+
+        $targetWidth = max(1, (int) round($width * $ratio));
+        $targetHeight = max(1, (int) round($height * $ratio));
+
+        return [$targetWidth, $targetHeight];
+    }
+
+    protected function maxResizeWidth(): ?int
+    {
+        $value = (int) config('uploads-manager.image_optimization.max_width');
+
+        return $value > 0 ? $value : null;
+    }
+
+    protected function maxResizeHeight(): ?int
+    {
+        $value = (int) config('uploads-manager.image_optimization.max_height');
+
+        return $value > 0 ? $value : null;
+    }
+
+    protected function avifSupportMessage(): string
+    {
+        $reasons = [];
+
+        if (! function_exists('imageavif')) {
+            $reasons[] = 'Install ext-gd with AVIF support (missing imageavif).';
+        }
+
+        if (! class_exists(\Imagick::class)) {
+            $reasons[] = 'Install ext-imagick for Imagick fallback support.';
+        } elseif (! $this->imagickSupportsAvif()) {
+            $reasons[] = 'Your Imagick/ImageMagick build does not support AVIF.';
+        }
+
+        return implode(' ', array_unique($reasons));
+    }
+
+    protected function webpSupportMessage(): string
+    {
+        $reasons = [];
+
+        if (! function_exists('imagewebp')) {
+            $reasons[] = 'Install ext-gd with WEBP support (missing imagewebp).';
+        }
+
+        if (! class_exists(\Imagick::class)) {
+            $reasons[] = 'Install ext-imagick for Imagick fallback support.';
+        } elseif (! $this->imagickSupportsWebp()) {
+            $reasons[] = 'Your Imagick/ImageMagick build does not support WEBP.';
+        }
+
+        return implode(' ', array_unique($reasons));
     }
 
     protected function createLink(Upload $upload, ?int $expiry = null): UploadLink

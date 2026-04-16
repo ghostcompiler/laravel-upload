@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Built%20With-Laravel%20Storage-0F172A?style=for-the-badge" alt="Laravel Storage">
 </p>
 
-> A Laravel package for upload storage, secure file URLs, model-based URL fields, inline preview support, file removal, and optional image optimization to AVIF.
+> A Laravel package for upload storage, secure file URLs, model-based URL fields, inline preview support, cleanup tools, and browser-focused image optimization.
 
 ## Overview
 
@@ -18,27 +18,96 @@ Uploads Manager is built to keep file handling simple inside Laravel apps.
 
 It gives you:
 
-- one upload method for `public` and `private` files
-- automatic storage using Laravel `Storage`
-- fixed upload folders inside `storage/app/UploadsManager`
+- one upload API with an optional custom folder path
+- facade usage with `Uploads::upload(...)`
+- helper usage with `GhostCompiler()->upload(...)`
+- storage through Laravel `Storage`
+- default file storage inside `UploadsManager`
 - database tracking for uploaded files
-- database tracking for generated file links
+- database tracking for generated links
 - model integration through one trait
-- hidden raw upload IDs with clean URL fields like `avatar`
-- browser preview for supported file types
+- clean URL fields like `avatar`
+- browser preview support
 - forced download support with `?download=1`
-- optional image optimization with AVIF conversion
+- image optimization with AVIF, WEBP, and original-file fallback
+- optional aspect-ratio-safe resizing
+- expired link cleanup command
 
-## Folder structure
+## Default Storage
 
-By default, files are stored here:
+By default, files are stored under:
 
 ```text
-storage/app/UploadsManager/public
-storage/app/UploadsManager/private
+storage/app/private/UploadsManager
 ```
 
-## Database tables
+If you pass a custom path like:
+
+```php
+Uploads::upload('demo/image', $request->file('avatar'));
+```
+
+the file is stored under:
+
+```text
+storage/app/private/UploadsManager/demo/image
+```
+
+## Installation
+
+### Install from Packagist
+
+```bash
+composer require ghostcompiler/uploads-manager
+```
+
+### Install from a local package path
+
+If you are developing this package locally and want to use it inside a Laravel app without publishing it to Packagist, add a path repository to your Laravel project's `composer.json`:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "path",
+            "url": "/absolute/path/to/UploadsManager"
+        }
+    ],
+    "require": {
+        "ghostcompiler/uploads-manager": "*"
+    }
+}
+```
+
+Then run:
+
+```bash
+composer update ghostcompiler/uploads-manager
+```
+
+## Package Install Command
+
+Publish config and package migrations:
+
+```bash
+php artisan ghost:UploadManager
+```
+
+If the files already exist, the command asks before overwriting them.
+
+Overwrite without prompts:
+
+```bash
+php artisan ghost:UploadManager --force
+```
+
+Run migrations:
+
+```bash
+php artisan migrate
+```
+
+## Database Tables
 
 The package manages two tables:
 
@@ -47,7 +116,7 @@ The package manages two tables:
 Stores:
 
 - storage disk
-- visibility
+- visibility metadata
 - file path
 - original file name
 - mime type
@@ -64,39 +133,11 @@ Stores:
 - expiry time
 - last accessed time
 
-This allows the package to create and manage URLs in a clean way.
+## Model Setup
 
-## Installation Guide
+Your own model still needs upload ID columns like `avatar_id`, `resume_id`, or `document_id`.
 
-### Step 1: Install the package
-
-```bash
-composer require ghostcompiler/uploads-manager
-```
-
-### Step 2: Publish config and migrations
-
-```bash
-php artisan uploads-manager:install
-```
-
-This publishes:
-
-- `config/uploads-manager.php`
-- migration for `uploads_manager_uploads`
-- migration for `uploads_manager_links`
-
-### Step 3: Run migrations
-
-```bash
-php artisan migrate
-```
-
-### Step 4: Add upload ID columns to your own tables
-
-The package stores file metadata in its own tables, but your own models still need a field like `avatar_id`, `resume_id`, or `document_id`.
-
-Example:
+Example migration:
 
 ```php
 use Illuminate\Database\Migrations\Migration;
@@ -121,15 +162,7 @@ return new class extends Migration
 };
 ```
 
-### Step 5: Add the trait to your model
-
-Import this trait:
-
-```php
-use GhostCompiler\UploadsManager\Concerns\UploadsManager;
-```
-
-Then use it in your model:
+Add the trait to your model:
 
 ```php
 use GhostCompiler\UploadsManager\Concerns\UploadsManager;
@@ -138,106 +171,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 class User extends Authenticatable
 {
     use UploadsManager;
-}
-```
-
-This trait is required for automatic URL field handling.
-
-### Step 6: Define uploadable fields
-
-Now define `protected $uploadable` on the model.
-
-Example:
-
-```php
-use GhostCompiler\UploadsManager\Concerns\UploadsManager;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-
-class User extends Authenticatable
-{
-    use UploadsManager;
-
-    protected $uploadable = [
-        'avatar_id' => [
-            'name' => 'avatar',
-            'type' => 'public',
-            'id' => 'hide',
-            'expiry' => 100,
-        ],
-        'resume_id' => [
-            'name' => 'resume',
-            'type' => 'private',
-            'id' => 'hide',
-            'expiry' => 30,
-        ],
-    ];
-}
-```
-
-## Quick Usage
-
-### Upload a file
-
-```php
-use GhostCompiler\UploadsManager\Facades\Uploads;
-
-$upload = Uploads::upload('public', $request->file('avatar'));
-
-$user->avatar_id = $upload->id;
-$user->save();
-```
-
-### Read file URL from the model
-
-```php
-$user->avatar;
-```
-
-If `avatar_id` is mapped with:
-
-```php
-'avatar_id' => [
-    'name' => 'avatar',
-]
-```
-
-then:
-
-- `avatar_id` stays in the database
-- `avatar` becomes the returned URL field
-
-### Remove a file
-
-```php
-Uploads::remove($user->avatar_id);
-```
-
-## Full Example
-
-### Example model
-
-```php
-<?php
-
-namespace App\Models;
-
-use GhostCompiler\UploadsManager\Concerns\UploadsManager;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-
-#[Fillable(['name', 'email', 'phone', 'password', 'role', 'avatar_id'])]
-#[Hidden(['password'])]
-class User extends Authenticatable
-{
-    use Notifiable, HasUuids, HasApiTokens, UploadsManager;
-
-    protected $casts = [
-        'password' => 'hashed',
-    ];
 
     protected $uploadable = [
         'avatar_id' => [
@@ -250,31 +183,103 @@ class User extends Authenticatable
 }
 ```
 
-### Example controller logic
+## Usage
+
+### Upload with the facade
+
+```php
+use GhostCompiler\UploadsManager\Facades\Uploads;
+
+$upload = Uploads::upload($request->file('avatar'));
+```
+
+### Upload into a custom folder
+
+```php
+use GhostCompiler\UploadsManager\Facades\Uploads;
+
+$upload = Uploads::upload('demo/image', $request->file('avatar'));
+```
+
+### Upload with the helper
+
+```php
+$upload = GhostCompiler()->upload($request->file('avatar'));
+```
+
+### Upload with the helper and a path
+
+```php
+$upload = GhostCompiler()->upload('demo/image', $request->file('avatar'));
+```
+
+### Save the upload ID on a model
+
+```php
+$user->avatar_id = $upload->id;
+$user->save();
+```
+
+### Read the file URL from the model
+
+```php
+$user->avatar;
+```
+
+### Remove a file
+
+```php
+Uploads::remove($user->avatar_id);
+```
+
+Or:
+
+```php
+GhostCompiler()->remove($user->avatar_id);
+```
+
+### Example controller
 
 ```php
 use App\Models\User;
 use GhostCompiler\UploadsManager\Facades\Uploads;
 use Illuminate\Http\Request;
 
-public function updateProfile(Request $request)
+class ApiController
 {
-    $user = auth()->user();
+    public function uploadAvatar(Request $request)
+    {
+        $user = auth()->user();
 
-    if ($request->hasFile('avatar')) {
-        $upload = Uploads::upload('public', $request->file('avatar'));
-        $user->avatar_id = $upload->id;
+        if ($request->hasFile('avatar')) {
+            $upload = Uploads::upload('superadmin.com', $request->file('avatar'));
+            $user->avatar_id = $upload->id;
+            $user->save();
+        }
+
+        return response()->json([
+            'user' => $user,
+        ]);
     }
-
-    $user->save();
-
-    return response()->json([
-        'user' => $user,
-    ]);
 }
 ```
 
-### Example API response shape
+## Response Shape
+
+If `avatar_id` is mapped like:
+
+```php
+'avatar_id' => [
+    'name' => 'avatar',
+]
+```
+
+then:
+
+- `avatar_id` stays in the database
+- `avatar` becomes the returned URL field
+
+Example API response:
 
 ```json
 {
@@ -307,7 +312,7 @@ Example preview URL:
 https://your-app.test/_uploads-manager/file/your-token
 ```
 
-If you want to force download for any file:
+Force download:
 
 ```text
 https://your-app.test/_uploads-manager/file/your-token?download=1
@@ -319,9 +324,11 @@ The package can optimize uploaded images globally.
 
 When enabled:
 
-- resolution stays the same
-- file size is reduced
-- supported images are converted to AVIF
+- supported images try AVIF first
+- if AVIF is unavailable, the package falls back to WEBP
+- if neither conversion path works, the original file is stored
+- resizing keeps the original aspect ratio
+- images are never upscaled
 - browser delivery becomes lighter and faster
 
 Supported input image types:
@@ -330,7 +337,46 @@ Supported input image types:
 - `image/png`
 - `image/webp`
 
-If the server cannot encode AVIF, the package falls back to the original uploaded file.
+### Important note
+
+If this config is disabled, no image conversion happens:
+
+```php
+'image_optimization' => [
+    'enabled' => false,
+]
+```
+
+To actually optimize images, enable it:
+
+```php
+'image_optimization' => [
+    'enabled' => true,
+    'quality' => 75,
+    'convert_to_avif' => true,
+    'max_width' => 1600,
+    'max_height' => null,
+]
+```
+
+In that example:
+
+- width is capped at `1600`
+- height is calculated automatically from the original aspect ratio
+
+## Cleanup Command
+
+Delete expired generated links:
+
+```bash
+php artisan ghost:UploadManager-clean
+```
+
+Preview how many expired links would be removed:
+
+```bash
+php artisan ghost:UploadManager-clean --dry-run
+```
 
 ## Config Guide
 
@@ -342,11 +388,6 @@ return [
 
     'base_path' => 'UploadsManager',
 
-    'paths' => [
-        'public' => 'public',
-        'private' => 'private',
-    ],
-
     'defaults' => [
         'type' => 'private',
         'id' => 'hide',
@@ -357,6 +398,8 @@ return [
         'enabled' => false,
         'quality' => 75,
         'convert_to_avif' => true,
+        'max_width' => null,
+        'max_height' => null,
     ],
 
     'preview_mime_types' => [
@@ -386,103 +429,43 @@ return [
 
 Laravel disk used for storing package files.
 
-Example:
-
-```php
-'disk' => 'local'
-```
-
 #### `base_path`
 
 Base folder inside the selected Laravel disk.
 
-Example:
-
-```php
-'base_path' => 'UploadsManager'
-```
-
-#### `paths.public`
-
-Subfolder used for public uploads.
-
-Default result:
-
-```text
-UploadsManager/public
-```
-
-#### `paths.private`
-
-Subfolder used for private uploads.
-
-Default result:
-
-```text
-UploadsManager/private
-```
-
 #### `defaults.type`
 
-Default upload type for model mapping when not explicitly given.
-
-Allowed values:
-
-- `public`
-- `private`
+Default upload visibility metadata used by the package.
 
 #### `defaults.id`
 
 Controls whether the raw upload ID field should remain visible.
 
-Recommended:
-
-```php
-'id' => 'hide'
-```
-
 #### `defaults.expiry`
 
 Default link expiry in minutes.
-
-Example:
-
-```php
-'expiry' => 60
-```
 
 #### `image_optimization.enabled`
 
 Enable or disable global image optimization.
 
-Example:
-
-```php
-'enabled' => true
-```
-
 #### `image_optimization.quality`
 
 Compression quality from `1` to `100`.
 
-- lower value = smaller file size
-- higher value = better visual quality
-
-Recommended starting point:
-
-```php
-'quality' => 75
-```
-
 #### `image_optimization.convert_to_avif`
 
-If enabled, supported uploaded images are converted to AVIF.
+If enabled, supported images try AVIF first and automatically fall back to WEBP.
 
-Example:
+#### `image_optimization.max_width`
 
-```php
-'convert_to_avif' => true
-```
+Optional maximum width for optimized images.
+If set by itself, height is calculated automatically from the original aspect ratio.
+
+#### `image_optimization.max_height`
+
+Optional maximum height for optimized images.
+If set by itself, width is calculated automatically from the original aspect ratio.
 
 #### `preview_mime_types`
 
@@ -492,21 +475,9 @@ List of mime types that should open inline in the browser instead of downloading
 
 If enabled, deleting the model also deletes the stored file and related upload record.
 
-Example:
-
-```php
-'delete_files_with_model' => true
-```
-
 #### `route.prefix`
 
 URL prefix for generated file links.
-
-Default:
-
-```text
-_uploads-manager
-```
 
 #### `route.name`
 
@@ -516,170 +487,131 @@ Laravel route name used internally by the package.
 
 Middleware applied to generated file serving routes.
 
-Default:
+## Local Development
 
-```php
-['web']
+### Use this package inside a local Laravel app
+
+1. Add a Composer path repository in the Laravel app.
+2. Require `ghostcompiler/uploads-manager`.
+3. Run:
+
+```bash
+composer update ghostcompiler/uploads-manager
+php artisan package:discover
+php artisan ghost:UploadManager
+php artisan migrate
 ```
 
-## Uploadable Field Options
+### Pull latest package changes into the Laravel app
 
-Each entry in `protected $uploadable` supports:
+When you make changes in this package repo and want your Laravel app to use them:
 
-### `name`
-
-The returned attribute name.
-
-Example:
-
-```php
-'name' => 'avatar'
+```bash
+composer update ghostcompiler/uploads-manager
+php artisan package:discover
 ```
 
-This means:
+If you changed helper autoloading or package metadata, this is also useful:
 
-- database field: `avatar_id`
-- returned URL field: `avatar`
-
-### `type`
-
-Upload visibility type.
-
-Allowed values:
-
-- `public`
-- `private`
-
-### `id`
-
-Controls whether the original DB ID field should be visible in serialized output.
-
-Recommended:
-
-```php
-'id' => 'hide'
+```bash
+composer dump-autoload
 ```
 
-### `expiry`
+If you changed the published config or migration stubs:
 
-Custom link expiry for this field in minutes.
-
-Example:
-
-```php
-'expiry' => 100
+```bash
+php artisan ghost:UploadManager
 ```
+
+Overwrite existing published files without prompts:
+
+```bash
+php artisan ghost:UploadManager --force
+```
+
+### Recommended pull / push workflow
+
+Inside the package repo:
+
+```bash
+git pull
+```
+
+Make your changes, then:
+
+```bash
+git add .
+git commit -m "Update uploads manager"
+git push
+```
+
+Inside the Laravel app using the local path repository:
+
+```bash
+composer update ghostcompiler/uploads-manager
+php artisan package:discover
+```
+
+## Testing
+
+This package now includes a PHPUnit + Testbench scaffold.
+
+### Install dev dependencies
+
+Inside the package repo:
+
+```bash
+composer install
+```
+
+### Run tests
+
+```bash
+vendor/bin/phpunit
+```
+
+### Current test coverage
+
+- resize dimension calculation
+- aspect-ratio preservation
+- no upscaling behavior
+- expired link cleanup command
+- dry-run cleanup reporting
+
+### Suggested manual testing in a Laravel app
+
+Use a real Laravel test project and verify:
+
+- upload works with `Uploads::upload(...)`
+- upload works with `GhostCompiler()->upload(...)`
+- custom folder uploads work
+- model serialization returns URL fields correctly
+- preview URL opens supported file types
+- `?download=1` forces download
+- AVIF conversion works when supported
+- WEBP fallback works when AVIF is unavailable
+- resize limits preserve the original aspect ratio
+- cleanup command removes only expired links
 
 ## Notes
 
-- `Uploads::upload()` only accepts `public` or `private`
+- `Uploads::upload($file)` stores files in the configured `base_path`
+- `Uploads::upload('demo/image', $file)` stores files inside `base_path/demo/image`
+- `GhostCompiler()->upload($file)` uses the same upload manager service directly
 - generated URLs are tracked in the database
-- file preview and download behavior are handled automatically
-- image optimization only applies to supported image uploads
-- AVIF conversion needs GD support with AVIF enabled on the server
-- `ext-gd` is suggested for image compression support
+- image optimization only applies to supported images
+- AVIF is tried first
+- WEBP is used as the main fallback format
+- resizing keeps the original aspect ratio
+- GD is used first and `Imagick` is used as a fallback encoder when available
 
-## Recommended Setup Example
+## Contribution Checklist
 
-```php
-protected $uploadable = [
-    'avatar_id' => [
-        'name' => 'avatar',
-        'type' => 'public',
-        'id' => 'hide',
-        'expiry' => 60,
-    ],
-    'document_id' => [
-        'name' => 'document',
-        'type' => 'private',
-        'id' => 'hide',
-        'expiry' => 15,
-    ],
-];
-```
-
-This gives you:
-
-- `$user->avatar` for a public previewable file URL
-- `$user->document` for a private file URL
-- hidden raw upload ID fields in responses
-
-## Developer Guide
-
-If you want to improve the package or contribute features, this section is for you.
-
-### Local development flow
-
-1. Clone the repository.
-2. Create your feature branch.
-3. Make your changes.
-4. test the package inside a Laravel app.
-5. update the README if behavior changes.
-6. open a pull request with a clear explanation.
-
-Example:
-
-```bash
-git clone <your-repo-url>
-cd UploadsManager
-git checkout -b feature/your-feature-name
-```
-
-### Suggested development setup
-
-Use this package with a local Laravel test project so you can verify:
-
-- uploads work
-- generated URLs open correctly
-- preview and forced download both work
-- model serialization returns the expected URL fields
-- image optimization works when enabled
-
-### Before opening a pull request
-
-Please check:
+Before opening a pull request, please check:
 
 - code is clean and readable
-- package behavior is documented
-- no unrelated files are changed
 - syntax checks pass
+- tests pass
 - new config options are documented
-
-### Contribution ideas
-
-Some good areas to contribute:
-
-- more file transformation options
-- better test coverage
-- artisan helpers for adding upload columns
-- cleanup tools for expired links
-- support for more image drivers
-
-### Support the project
-
-If this package helps you, please support it:
-
-- star the repository
-- share it with other Laravel developers
-- open issues with clear reproduction steps
-- contribute fixes and improvements
-
-### How to report bugs
-
-When opening an issue, include:
-
-- Laravel version
-- PHP version
-- package version or branch
-- database driver
-- exact error message
-- steps to reproduce
-
-### Pull request notes
-
-A good pull request should include:
-
-- what changed
-- why it changed
-- how it was tested
-- whether README or config docs were updated
+- README is updated when behavior changes
+- no unrelated files are included

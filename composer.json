@@ -8,13 +8,17 @@
         "illuminate/support": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0"
     },
     "suggest": {
-        "ext-gd": "Required for image compression and AVIF conversion support.",
+        "ext-gd": "Used for image compression plus AVIF/WEBP conversion when supported by the PHP build.",
+        "ext-imagick": "Used as an automatic fallback for AVIF/WEBP conversion when GD support is unavailable or limited.",
         "laravel/framework": "Required in the host application to provide Eloquent, routing, console, HTTP, and filesystem integration."
     },
     "autoload": {
         "psr-4": {
             "GhostCompiler\\UploadsManager\\": "src/"
-        }
+        },
+        "files": [
+            "src/helpers.php"
+        ]
     },
     "extra": {
         "laravel": {
@@ -32,6 +36,10 @@
         "psr-4": {
             "GhostCompiler\\UploadsManager\\Tests\\": "tests/"
         }
+    },
+    "require-dev": {
+        "orchestra/testbench": "^7.0 || ^8.0 || ^9.0 || ^10.0",
+        "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
     },
     "authors": [
         {

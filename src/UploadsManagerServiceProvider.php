@@ -2,6 +2,7 @@
 
 namespace GhostCompiler\UploadsManager;
 
+use GhostCompiler\UploadsManager\Commands\CleanupExpiredLinksCommand;
 use GhostCompiler\UploadsManager\Commands\InstallCommand;
 use GhostCompiler\UploadsManager\Http\Controllers\UploadController;
 use GhostCompiler\UploadsManager\Services\UploadManager;
@@ -35,6 +36,7 @@ class UploadsManagerServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([
+                CleanupExpiredLinksCommand::class,
                 InstallCommand::class,
             ]);
         }
