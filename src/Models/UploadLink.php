@@ -1,13 +1,13 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Models;
+namespace GhostCompiler\LaravelUploads\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UploadLink extends Model
 {
-    protected $table = 'uploads_manager_links';
+    protected $table = 'laravel_uploads_links';
 
     protected $fillable = [
         'upload_id',
@@ -29,7 +29,7 @@ class UploadLink extends Model
     public function url(): string
     {
         return route(
-            config('uploads-manager.route.name', 'uploads-manager.show'),
+            config('laravel-uploads.route.name', 'laravel-uploads.show'),
             ['token' => $this->token]
         );
     }

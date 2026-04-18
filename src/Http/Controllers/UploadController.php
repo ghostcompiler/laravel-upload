@@ -1,8 +1,8 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Http\Controllers;
+namespace GhostCompiler\LaravelUploads\Http\Controllers;
 
-use GhostCompiler\UploadsManager\Models\UploadLink;
+use GhostCompiler\LaravelUploads\Models\UploadLink;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
@@ -53,7 +53,7 @@ class UploadController extends Controller
             return false;
         }
 
-        $previewableMimeTypes = config('uploads-manager.preview_mime_types', [
+        $previewableMimeTypes = config('laravel-uploads.preview_mime_types', [
             'image/jpeg',
             'image/png',
             'image/gif',

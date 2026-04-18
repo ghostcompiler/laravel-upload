@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('uploads_manager_uploads', function (Blueprint $table): void {
+        Schema::create('laravel_uploads_uploads', function (Blueprint $table): void {
             $table->id();
             $table->string('disk');
             $table->string('visibility', 20);
@@ -24,6 +24,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('uploads_manager_uploads');
+        Schema::dropIfExists('laravel_uploads_uploads');
     }
 };

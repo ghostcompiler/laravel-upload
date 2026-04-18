@@ -1,7 +1,7 @@
-# Uploads Manager
+# Laravel Uploads
 
 <p align="center">
-  <img src="assets/logo/logo.png" alt="Uploads Manager Logo" width="180">
+  <img src="assets/logo/logo.png" alt="Laravel Uploads Logo" width="180">
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 ## Overview
 
-Uploads Manager is built to keep file handling simple inside Laravel apps.
+Laravel Uploads is built to keep file handling simple inside Laravel apps.
 
 It gives you:
 
@@ -22,7 +22,7 @@ It gives you:
 - facade usage with `Uploads::upload(...)`
 - helper usage with `GhostCompiler()->upload(...)`
 - storage through Laravel `Storage`
-- default file storage inside `UploadsManager`
+- default file storage inside `LaravelUploads`
 - database tracking for uploaded files
 - database tracking for generated links
 - model integration through one trait
@@ -38,7 +38,7 @@ It gives you:
 By default, files are stored under:
 
 ```text
-storage/app/private/UploadsManager
+storage/app/private/LaravelUploads
 ```
 
 If you pass a custom path like:
@@ -50,7 +50,7 @@ Uploads::upload('demo/image', $request->file('avatar'));
 the file is stored under:
 
 ```text
-storage/app/private/UploadsManager/demo/image
+storage/app/private/LaravelUploads/demo/image
 ```
 
 ## Installation
@@ -58,7 +58,7 @@ storage/app/private/UploadsManager/demo/image
 ### Install from Packagist
 
 ```bash
-composer require ghostcompiler/uploads-manager
+composer require ghostcompiler/laravel-uploads
 ```
 
 ### Install from a local package path
@@ -70,11 +70,11 @@ If you are developing this package locally and want to use it inside a Laravel a
     "repositories": [
         {
             "type": "path",
-            "url": "/absolute/path/to/UploadsManager"
+            "url": "/absolute/path/to/laravel-uploads"
         }
     ],
     "require": {
-        "ghostcompiler/uploads-manager": "*"
+        "ghostcompiler/laravel-uploads": "*"
     }
 }
 ```
@@ -82,7 +82,7 @@ If you are developing this package locally and want to use it inside a Laravel a
 Then run:
 
 ```bash
-composer update ghostcompiler/uploads-manager
+composer update ghostcompiler/laravel-uploads
 ```
 
 ## Package Install Command
@@ -90,7 +90,7 @@ composer update ghostcompiler/uploads-manager
 Publish config and package migrations:
 
 ```bash
-php artisan ghost:UploadManager
+php artisan ghost:laravel-uploads
 ```
 
 If the files already exist, the command asks before overwriting them.
@@ -98,7 +98,7 @@ If the files already exist, the command asks before overwriting them.
 Overwrite without prompts:
 
 ```bash
-php artisan ghost:UploadManager --force
+php artisan ghost:laravel-uploads --force
 ```
 
 Run migrations:
@@ -111,7 +111,7 @@ php artisan migrate
 
 The package manages two tables:
 
-### `uploads_manager_uploads`
+### `laravel_uploads_uploads`
 
 Stores:
 
@@ -124,7 +124,7 @@ Stores:
 - size
 - metadata
 
-### `uploads_manager_links`
+### `laravel_uploads_links`
 
 Stores:
 
@@ -165,12 +165,12 @@ return new class extends Migration
 Add the trait to your model:
 
 ```php
-use GhostCompiler\UploadsManager\Concerns\UploadsManager;
+use GhostCompiler\LaravelUploads\Concerns\LaravelUploads;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class User extends Authenticatable
 {
-    use UploadsManager;
+    use LaravelUploads;
 
     protected $uploadable = [
         'avatar_id' => [
@@ -188,7 +188,7 @@ class User extends Authenticatable
 ### Upload with the facade
 
 ```php
-use GhostCompiler\UploadsManager\Facades\Uploads;
+use GhostCompiler\LaravelUploads\Facades\Uploads;
 
 $upload = Uploads::upload($request->file('avatar'));
 ```
@@ -196,7 +196,7 @@ $upload = Uploads::upload($request->file('avatar'));
 ### Upload into a custom folder
 
 ```php
-use GhostCompiler\UploadsManager\Facades\Uploads;
+use GhostCompiler\LaravelUploads\Facades\Uploads;
 
 $upload = Uploads::upload('demo/image', $request->file('avatar'));
 ```
@@ -242,7 +242,7 @@ GhostCompiler()->remove($user->avatar_id);
 
 ```php
 use App\Models\User;
-use GhostCompiler\UploadsManager\Facades\Uploads;
+use GhostCompiler\LaravelUploads\Facades\Uploads;
 use Illuminate\Http\Request;
 
 class ApiController
@@ -286,7 +286,7 @@ Example API response:
   "id": "019d810d-1499-7192-9f99-4a67c5ad350b",
   "name": "Ghost Compiler",
   "email": "ghost@example.com",
-  "avatar": "https://your-app.test/_uploads-manager/file/your-token"
+  "avatar": "https://your-app.test/_laravel-uploads/file/your-token"
 }
 ```
 
@@ -309,13 +309,13 @@ Preview currently supports:
 Example preview URL:
 
 ```text
-https://your-app.test/_uploads-manager/file/your-token
+https://your-app.test/_laravel-uploads/file/your-token
 ```
 
 Force download:
 
 ```text
-https://your-app.test/_uploads-manager/file/your-token?download=1
+https://your-app.test/_laravel-uploads/file/your-token?download=1
 ```
 
 ## Image Optimization
@@ -369,13 +369,13 @@ In that example:
 Delete expired generated links:
 
 ```bash
-php artisan ghost:UploadManager-clean
+php artisan ghost:laravel-uploads-clean
 ```
 
 Preview how many expired links would be removed:
 
 ```bash
-php artisan ghost:UploadManager-clean --dry-run
+php artisan ghost:laravel-uploads-clean --dry-run
 ```
 
 ## Config Guide
@@ -386,7 +386,7 @@ Published config file:
 return [
     'disk' => 'local',
 
-    'base_path' => 'UploadsManager',
+    'base_path' => 'LaravelUploads',
 
     'defaults' => [
         'type' => 'private',
@@ -416,8 +416,8 @@ return [
     'delete_files_with_model' => false,
 
     'route' => [
-        'prefix' => '_uploads-manager',
-        'name' => 'uploads-manager.show',
+        'prefix' => '_laravel-uploads',
+        'name' => 'laravel-uploads.show',
         'middleware' => ['web'],
     ],
 ];
@@ -492,13 +492,13 @@ Middleware applied to generated file serving routes.
 ### Use this package inside a local Laravel app
 
 1. Add a Composer path repository in the Laravel app.
-2. Require `ghostcompiler/uploads-manager`.
+2. Require `ghostcompiler/laravel-uploads`.
 3. Run:
 
 ```bash
-composer update ghostcompiler/uploads-manager
+composer update ghostcompiler/laravel-uploads
 php artisan package:discover
-php artisan ghost:UploadManager
+php artisan ghost:laravel-uploads
 php artisan migrate
 ```
 
@@ -507,7 +507,7 @@ php artisan migrate
 When you make changes in this package repo and want your Laravel app to use them:
 
 ```bash
-composer update ghostcompiler/uploads-manager
+composer update ghostcompiler/laravel-uploads
 php artisan package:discover
 ```
 
@@ -520,13 +520,13 @@ composer dump-autoload
 If you changed the published config or migration stubs:
 
 ```bash
-php artisan ghost:UploadManager
+php artisan ghost:laravel-uploads
 ```
 
 Overwrite existing published files without prompts:
 
 ```bash
-php artisan ghost:UploadManager --force
+php artisan ghost:laravel-uploads --force
 ```
 
 ### Recommended pull / push workflow
@@ -541,14 +541,14 @@ Make your changes, then:
 
 ```bash
 git add .
-git commit -m "Update uploads manager"
+git commit -m "Update Laravel Uploads"
 git push
 ```
 
 Inside the Laravel app using the local path repository:
 
 ```bash
-composer update ghostcompiler/uploads-manager
+composer update ghostcompiler/laravel-uploads
 php artisan package:discover
 ```
 
@@ -567,7 +567,7 @@ composer install
 ### Run tests
 
 ```bash
-vendor/bin/phpunit
+composer test
 ```
 
 ### Current test coverage
@@ -597,7 +597,7 @@ Use a real Laravel test project and verify:
 
 - `Uploads::upload($file)` stores files in the configured `base_path`
 - `Uploads::upload('demo/image', $file)` stores files inside `base_path/demo/image`
-- `GhostCompiler()->upload($file)` uses the same upload manager service directly
+- `GhostCompiler()->upload($file)` uses the same Laravel Uploads service directly
 - generated URLs are tracked in the database
 - image optimization only applies to supported images
 - AVIF is tried first

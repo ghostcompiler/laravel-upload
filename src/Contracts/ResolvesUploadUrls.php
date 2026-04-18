@@ -1,8 +1,8 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Contracts;
+namespace GhostCompiler\LaravelUploads\Contracts;
 
-use GhostCompiler\UploadsManager\Models\Upload;
+use GhostCompiler\LaravelUploads\Models\Upload;
 
 interface ResolvesUploadUrls
 {

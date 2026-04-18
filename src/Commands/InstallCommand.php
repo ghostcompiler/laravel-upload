@@ -1,15 +1,15 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Commands;
+namespace GhostCompiler\LaravelUploads\Commands;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Console\Command;
 
 class InstallCommand extends Command
 {
-    protected $signature = 'ghost:UploadManager {--force : Overwrite existing Uploads Manager files}';
+    protected $signature = 'ghost:laravel-uploads {--force : Overwrite existing Laravel Uploads files}';
 
-    protected $description = 'Publish the Uploads Manager config and migration files';
+    protected $description = 'Publish the Laravel Uploads config and migration files';
 
     public function __construct(protected Filesystem $files)
     {
@@ -23,15 +23,15 @@ class InstallCommand extends Command
         $this->publishConfig($force);
         $this->publishMigrations($force);
 
-        $this->components->info('Uploads Manager assets published successfully.');
+        $this->components->info('Laravel Uploads assets published successfully.');
 
         return self::SUCCESS;
     }
 
     protected function publishConfig(bool $force): void
     {
-        $source = dirname(__DIR__, 2).'/config/uploads-manager.php';
-        $target = config_path('uploads-manager.php');
+        $source = dirname(__DIR__, 2).'/config/laravel-uploads.php';
+        $target = config_path('laravel-uploads.php');
 
         if ($this->files->exists($target) && ! $this->shouldOverwrite('Config file already exists', $force)) {
             $this->components->warn('Skipped config publishing.');
@@ -42,14 +42,14 @@ class InstallCommand extends Command
         $this->ensureDirectoryExists(dirname($target));
         $this->files->copy($source, $target);
 
-        $this->components->info('Published config/uploads-manager.php');
+        $this->components->info('Published config/laravel-uploads.php');
     }
 
     protected function publishMigrations(bool $force): void
     {
         $migrations = [
-            'create_uploads_manager_uploads_table.php' => dirname(__DIR__, 2).'/database/migrations/create_uploads_manager_uploads_table.php.stub',
-            'create_uploads_manager_links_table.php' => dirname(__DIR__, 2).'/database/migrations/create_uploads_manager_links_table.php.stub',
+            'create_laravel_uploads_uploads_table.php' => dirname(__DIR__, 2).'/database/migrations/create_laravel_uploads_uploads_table.php.stub',
+            'create_laravel_uploads_links_table.php' => dirname(__DIR__, 2).'/database/migrations/create_laravel_uploads_links_table.php.stub',
         ];
 
         $timestamp = time();

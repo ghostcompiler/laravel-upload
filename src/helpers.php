@@ -1,10 +1,10 @@
 <?php
 
-use GhostCompiler\UploadsManager\Services\UploadManager;
+use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 
 if (! function_exists('GhostCompiler')) {
-    function GhostCompiler(): UploadManager
+    function GhostCompiler(): LaravelUploadsManager
     {
-        return app(UploadManager::class);
+        return app(LaravelUploadsManager::class);
     }
 }

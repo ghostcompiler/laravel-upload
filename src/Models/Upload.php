@@ -1,14 +1,14 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Models;
+namespace GhostCompiler\LaravelUploads\Models;
 
-use GhostCompiler\UploadsManager\Services\UploadManager;
+use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Upload extends Model
 {
-    protected $table = 'uploads_manager_uploads';
+    protected $table = 'laravel_uploads_uploads';
 
     protected $fillable = [
         'disk',
@@ -28,8 +28,8 @@ class Upload extends Model
 
     public function getUrlAttribute(): ?string
     {
-        /** @var UploadManager $manager */
-        $manager = app(UploadManager::class);
+        /** @var LaravelUploadsManager $manager */
+        $manager = app(LaravelUploadsManager::class);
 
         return $manager->url($this);
     }

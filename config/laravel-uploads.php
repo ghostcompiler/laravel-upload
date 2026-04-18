@@ -3,7 +3,7 @@
 return [
     'disk' => 'local',
 
-    'base_path' => 'UploadsManager',
+    'base_path' => 'LaravelUploads',
 
     'defaults' => [
         'type' => 'private',
@@ -37,8 +37,8 @@ return [
     'delete_files_with_model' => false,
 
     'route' => [
-        'prefix' => '_uploads-manager',
-        'name' => 'uploads-manager.show',
+        'prefix' => '_laravel-uploads',
+        'name' => 'laravel-uploads.show',
         'middleware' => ['web'],
     ],
 ];

@@ -1,10 +1,10 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Tests\Feature;
+namespace GhostCompiler\LaravelUploads\Tests\Feature;
 
-use GhostCompiler\UploadsManager\Models\Upload;
-use GhostCompiler\UploadsManager\Models\UploadLink;
-use GhostCompiler\UploadsManager\Tests\TestCase;
+use GhostCompiler\LaravelUploads\Models\Upload;
+use GhostCompiler\LaravelUploads\Models\UploadLink;
+use GhostCompiler\LaravelUploads\Tests\TestCase;
 
 class CleanupExpiredLinksCommandTest extends TestCase
 {
@@ -13,7 +13,7 @@ class CleanupExpiredLinksCommandTest extends TestCase
         $upload = Upload::query()->create([
             'disk' => 'local',
             'visibility' => 'private',
-            'path' => 'UploadsManager/example.png',
+            'path' => 'LaravelUploads/example.png',
             'original_name' => 'example.png',
             'mime_type' => 'image/png',
             'extension' => 'png',
@@ -32,8 +32,8 @@ class CleanupExpiredLinksCommandTest extends TestCase
             'expires_at' => now()->addMinute(),
         ]);
 
-        $this->artisan('ghost:UploadManager-clean')
-            ->expectsOutput('Removed 1 expired Uploads Manager links.')
+        $this->artisan('ghost:laravel-uploads-clean')
+            ->expectsOutputToContain('Removed 1 expired Laravel Uploads links.')
             ->assertSuccessful();
 
         $this->assertSame(1, UploadLink::query()->count());
@@ -45,7 +45,7 @@ class CleanupExpiredLinksCommandTest extends TestCase
         $upload = Upload::query()->create([
             'disk' => 'local',
             'visibility' => 'private',
-            'path' => 'UploadsManager/example.png',
+            'path' => 'LaravelUploads/example.png',
             'original_name' => 'example.png',
             'mime_type' => 'image/png',
             'extension' => 'png',
@@ -58,8 +58,8 @@ class CleanupExpiredLinksCommandTest extends TestCase
             'expires_at' => now()->subMinute(),
         ]);
 
-        $this->artisan('ghost:UploadManager-clean --dry-run')
-            ->expectsOutput('1 expired Uploads Manager links would be removed.')
+        $this->artisan('ghost:laravel-uploads-clean --dry-run')
+            ->expectsOutputToContain('1 expired Laravel Uploads links would be removed.')
             ->assertSuccessful();
 
         $this->assertSame(1, UploadLink::query()->count());

@@ -1,16 +1,16 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Concerns;
+namespace GhostCompiler\LaravelUploads\Concerns;
 
-use GhostCompiler\UploadsManager\Models\Upload;
-use GhostCompiler\UploadsManager\Services\UploadManager as UploadManagerService;
+use GhostCompiler\LaravelUploads\Models\Upload;
+use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
-trait UploadsManager
+trait LaravelUploads
 {
-    public function initializeUploadsManager(): void
+    public function initializeLaravelUploads(): void
     {
         $hidden = $this->hidden ?? [];
 
@@ -23,7 +23,7 @@ trait UploadsManager
         $this->hidden = $hidden;
     }
 
-    public static function bootUploadsManager(): void
+    public static function bootLaravelUploads(): void
     {
         static::deleting(function ($model): void {
             foreach ($model->uploadableFields() as $column => $options) {
@@ -33,7 +33,7 @@ trait UploadsManager
                     continue;
                 }
 
-                $deleteOnModelDelete = (bool) config('uploads-manager.delete_files_with_model', false);
+                $deleteOnModelDelete = (bool) config('laravel-uploads.delete_files_with_model', false);
 
                 if ($deleteOnModelDelete) {
                     $disk = app('filesystem')->disk($upload->disk);
@@ -61,7 +61,7 @@ trait UploadsManager
             return null;
         }
 
-        return app(UploadManagerService::class)->url(
+        return app(LaravelUploadsManager::class)->url(
             $this->resolveUploadFromColumn($column),
             $config['expiry']
         );
@@ -75,13 +75,13 @@ trait UploadsManager
             return null;
         }
 
-        return app(UploadManagerService::class)->find((int) $id);
+        return app(LaravelUploadsManager::class)->find((int) $id);
     }
 
     public function uploadableFields(): array
     {
         $fields = property_exists($this, 'uploadable') ? $this->uploadable : [];
-        $defaults = config('uploads-manager.defaults', []);
+        $defaults = config('laravel-uploads.defaults', []);
         $normalized = [];
 
         foreach ($fields as $column => $options) {
@@ -103,7 +103,7 @@ trait UploadsManager
         if (is_string($key)) {
             foreach ($this->uploadableFields() as $column => $options) {
                 if ($options['name'] === $key) {
-                    return app(UploadManagerService::class)->urlFromId(
+                    return app(LaravelUploadsManager::class)->urlFromId(
                         $this->getRawOriginal($column),
                         $options['expiry']
                     );
@@ -123,7 +123,7 @@ trait UploadsManager
                 unset($attributes[$column]);
             }
 
-            $attributes[$options['name']] = app(UploadManagerService::class)->urlFromId(
+            $attributes[$options['name']] = app(LaravelUploadsManager::class)->urlFromId(
                 $this->getRawOriginal($column),
                 $options['expiry']
             );

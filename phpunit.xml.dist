@@ -5,7 +5,7 @@
          colors="true"
          cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="Uploads Manager">
+        <testsuite name="Laravel Uploads">
             <directory>tests</directory>
         </testsuite>
     </testsuites>

@@ -1,18 +1,18 @@
 <?php
 
-namespace GhostCompiler\UploadsManager\Services;
+namespace GhostCompiler\LaravelUploads\Services;
 
-use GhostCompiler\UploadsManager\Contracts\ResolvesUploadUrls;
-use GhostCompiler\UploadsManager\Exceptions\UploadsManagerException;
-use GhostCompiler\UploadsManager\Models\Upload;
-use GhostCompiler\UploadsManager\Models\UploadLink;
+use GhostCompiler\LaravelUploads\Contracts\ResolvesUploadUrls;
+use GhostCompiler\LaravelUploads\Exceptions\LaravelUploadsException;
+use GhostCompiler\LaravelUploads\Models\Upload;
+use GhostCompiler\LaravelUploads\Models\UploadLink;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class UploadManager implements ResolvesUploadUrls
+class LaravelUploadsManager implements ResolvesUploadUrls
 {
     public function upload(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): Upload
     {
@@ -117,10 +117,10 @@ class UploadManager implements ResolvesUploadUrls
         }
 
         if (! $file instanceof UploadedFile) {
-            $message = 'UploadsManager: A valid uploaded file is required.';
+            $message = 'LaravelUploads: A valid uploaded file is required.';
             Log::error($message);
 
-            throw new UploadsManagerException($message);
+            throw new LaravelUploadsException($message);
         }
 
         return [$pathOrFile, $file];
@@ -128,19 +128,19 @@ class UploadManager implements ResolvesUploadUrls
 
     protected function defaultVisibility(): string
     {
-        $visibility = strtolower(trim((string) config('uploads-manager.defaults.type', 'private')));
+        $visibility = strtolower(trim((string) config('laravel-uploads.defaults.type', 'private')));
 
         return in_array($visibility, ['public', 'private'], true) ? $visibility : 'private';
     }
 
     protected function disk(): string
     {
-        return (string) config('uploads-manager.disk', config('filesystems.default', 'local'));
+        return (string) config('laravel-uploads.disk', config('filesystems.default', 'local'));
     }
 
     protected function directoryFor(?string $path = null): string
     {
-        $basePath = trim((string) config('uploads-manager.base_path', 'UploadsManager'), '/');
+        $basePath = trim((string) config('laravel-uploads.base_path', 'LaravelUploads'), '/');
         $directory = trim((string) $path, '/');
 
         return $directory !== '' ? "{$basePath}/{$directory}" : $basePath;
@@ -194,10 +194,10 @@ class UploadManager implements ResolvesUploadUrls
         $realPath = $file->getRealPath();
 
         if (! is_string($realPath) || trim($realPath) === '' || ! is_file($realPath)) {
-            $message = 'UploadsManager: Unable to read the uploaded file from its temporary path.';
+            $message = 'LaravelUploads: Unable to read the uploaded file from its temporary path.';
             Log::error($message);
 
-            throw new UploadsManagerException($message);
+            throw new LaravelUploadsException($message);
         }
 
         $size = filesize($realPath) ?: $file->getSize();
@@ -219,12 +219,12 @@ class UploadManager implements ResolvesUploadUrls
 
     protected function shouldCompressImages(): bool
     {
-        return (bool) config('uploads-manager.image_optimization.enabled', false);
+        return (bool) config('laravel-uploads.image_optimization.enabled', false);
     }
 
     protected function compressionQuality(): int
     {
-        return max(1, min(100, (int) config('uploads-manager.image_optimization.quality', 75)));
+        return max(1, min(100, (int) config('laravel-uploads.image_optimization.quality', 75)));
     }
 
     protected function isCompressibleImage(UploadedFile $file): bool
@@ -240,11 +240,11 @@ class UploadManager implements ResolvesUploadUrls
 
     protected function convertOptimizedImage(UploadedFile $file): ?array
     {
-        if (! (bool) config('uploads-manager.image_optimization.convert_to_avif', true)) {
+        if (! (bool) config('laravel-uploads.image_optimization.convert_to_avif', true)) {
             $converted = $this->convertImageToWebp($file);
 
             if ($converted === null) {
-                Log::warning('UploadsManager: Image optimization skipped. WEBP conversion is unavailable. '.$this->webpSupportMessage());
+                Log::warning('LaravelUploads: Image optimization skipped. WEBP conversion is unavailable. '.$this->webpSupportMessage());
             }
 
             return $converted;
@@ -259,19 +259,19 @@ class UploadManager implements ResolvesUploadUrls
         $converted = $this->convertImageToWebp($file);
 
         if ($converted !== null) {
-            Log::warning('UploadsManager: AVIF conversion unavailable. Falling back to WEBP.');
+            Log::warning('LaravelUploads: AVIF conversion unavailable. Falling back to WEBP.');
 
             return $converted;
         }
 
-        Log::warning('UploadsManager: Image optimization skipped. AVIF and WEBP conversion are unavailable. '.$this->avifSupportMessage().' '.$this->webpSupportMessage());
+        Log::warning('LaravelUploads: Image optimization skipped. AVIF and WEBP conversion are unavailable. '.$this->avifSupportMessage().' '.$this->webpSupportMessage());
 
         return null;
     }
 
     protected function convertImageToAvif(UploadedFile $file): ?array
     {
-        if (! (bool) config('uploads-manager.image_optimization.convert_to_avif', true)) {
+        if (! (bool) config('laravel-uploads.image_optimization.convert_to_avif', true)) {
             return null;
         }
 
@@ -287,7 +287,7 @@ class UploadManager implements ResolvesUploadUrls
             return $converted;
         }
 
-        Log::warning('UploadsManager: AVIF conversion is unavailable. '.$this->avifSupportMessage());
+        Log::warning('LaravelUploads: AVIF conversion is unavailable. '.$this->avifSupportMessage());
 
         return null;
     }
@@ -307,12 +307,12 @@ class UploadManager implements ResolvesUploadUrls
         $dimensions = $this->resizeGdImageResource($source);
         $source = $dimensions['resource'];
 
-        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-avif-');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'laravel-uploads-avif-');
 
         if ($temporaryFile === false) {
             imagedestroy($source);
 
-            $message = 'UploadsManager: Unable to create a temporary file for AVIF conversion.';
+            $message = 'LaravelUploads: Unable to create a temporary file for AVIF conversion.';
             Log::error($message);
 
             return null;
@@ -332,7 +332,7 @@ class UploadManager implements ResolvesUploadUrls
         if (! $saved || ! is_file($avifPath)) {
             @unlink($avifPath);
 
-            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image.';
+            $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image.';
             Log::error($message);
 
             return null;
@@ -364,10 +364,10 @@ class UploadManager implements ResolvesUploadUrls
             return null;
         }
 
-        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-avif-');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'laravel-uploads-avif-');
 
         if ($temporaryFile === false) {
-            $message = 'UploadsManager: Unable to create a temporary file for AVIF conversion.';
+            $message = 'LaravelUploads: Unable to create a temporary file for AVIF conversion.';
             Log::error($message);
 
             return null;
@@ -388,14 +388,14 @@ class UploadManager implements ResolvesUploadUrls
         } catch (\Throwable $exception) {
             @unlink($avifPath);
 
-            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
+            $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
             Log::error($message);
 
             return null;
         }
 
         if (! is_file($avifPath)) {
-            $message = 'UploadsManager: AVIF conversion failed while encoding the uploaded image with Imagick.';
+            $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image with Imagick.';
             Log::error($message);
 
             return null;
@@ -449,12 +449,12 @@ class UploadManager implements ResolvesUploadUrls
         $dimensions = $this->resizeGdImageResource($source);
         $source = $dimensions['resource'];
 
-        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-webp-');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'laravel-uploads-webp-');
 
         if ($temporaryFile === false) {
             imagedestroy($source);
 
-            $message = 'UploadsManager: Unable to create a temporary file for WEBP conversion.';
+            $message = 'LaravelUploads: Unable to create a temporary file for WEBP conversion.';
             Log::error($message);
 
             return null;
@@ -474,7 +474,7 @@ class UploadManager implements ResolvesUploadUrls
         if (! $saved || ! is_file($webpPath)) {
             @unlink($webpPath);
 
-            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image.';
+            $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image.';
             Log::error($message);
 
             return null;
@@ -506,10 +506,10 @@ class UploadManager implements ResolvesUploadUrls
             return null;
         }
 
-        $temporaryFile = tempnam(sys_get_temp_dir(), 'uploads-manager-webp-');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'laravel-uploads-webp-');
 
         if ($temporaryFile === false) {
-            $message = 'UploadsManager: Unable to create a temporary file for WEBP conversion.';
+            $message = 'LaravelUploads: Unable to create a temporary file for WEBP conversion.';
             Log::error($message);
 
             return null;
@@ -530,14 +530,14 @@ class UploadManager implements ResolvesUploadUrls
         } catch (\Throwable $exception) {
             @unlink($webpPath);
 
-            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
+            $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
             Log::error($message);
 
             return null;
         }
 
         if (! is_file($webpPath)) {
-            $message = 'UploadsManager: WEBP conversion failed while encoding the uploaded image with Imagick.';
+            $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image with Imagick.';
             Log::error($message);
 
             return null;
@@ -733,14 +733,14 @@ class UploadManager implements ResolvesUploadUrls
 
     protected function maxResizeWidth(): ?int
     {
-        $value = (int) config('uploads-manager.image_optimization.max_width');
+        $value = (int) config('laravel-uploads.image_optimization.max_width');
 
         return $value > 0 ? $value : null;
     }
 
     protected function maxResizeHeight(): ?int
     {
-        $value = (int) config('uploads-manager.image_optimization.max_height');
+        $value = (int) config('laravel-uploads.image_optimization.max_height');
 
         return $value > 0 ? $value : null;
     }
@@ -781,7 +781,7 @@ class UploadManager implements ResolvesUploadUrls
 
     protected function createLink(Upload $upload, ?int $expiry = null): UploadLink
     {
-        $minutes = $expiry ?? (int) config('uploads-manager.defaults.expiry', 60);
+        $minutes = $expiry ?? (int) config('laravel-uploads.defaults.expiry', 60);
 
         return UploadLink::query()->create([
             'upload_id' => $upload->id,
