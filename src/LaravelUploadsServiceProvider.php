@@ -26,11 +26,8 @@ class LaravelUploadsServiceProvider extends ServiceProvider
         ], 'laravel-uploads-config');
 
         $this->publishes([
-            __DIR__.'/../database/migrations/create_laravel_uploads_uploads_table.php.stub' => database_path(
-                'migrations/'.date('Y_m_d_His').'_create_laravel_uploads_uploads_table.php'
-            ),
-            __DIR__.'/../database/migrations/create_laravel_uploads_links_table.php.stub' => database_path(
-                'migrations/'.date('Y_m_d_His', time() + 1).'_create_laravel_uploads_links_table.php'
+            __DIR__.'/../database/migrations/create_laravel_uploads_tables.php.stub' => database_path(
+                'migrations/'.date('Y_m_d_His').'_create_laravel_uploads_tables.php'
             ),
         ], 'laravel-uploads-migrations');
 

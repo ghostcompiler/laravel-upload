@@ -8,6 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::create('laravel_uploads_uploads', function (Blueprint $table): void {
+            $table->id();
+            $table->string('disk');
+            $table->string('visibility', 20);
+            $table->string('path')->unique();
+            $table->string('original_name');
+            $table->string('mime_type')->nullable();
+            $table->string('extension', 20)->nullable();
+            $table->unsignedBigInteger('size')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('laravel_uploads_links', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('upload_id')->constrained('laravel_uploads_uploads')->cascadeOnDelete();
@@ -21,5 +34,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('laravel_uploads_links');
+        Schema::dropIfExists('laravel_uploads_uploads');
     }
 };

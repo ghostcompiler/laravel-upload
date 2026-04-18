@@ -10,13 +10,11 @@ class InstallCommandTest extends TestCase
     {
         $this->artisan('ghost:laravel-uploads --force')
             ->expectsOutputToContain('Published config/laravel-uploads.php')
-            ->expectsOutputToContain('Published create_laravel_uploads_uploads_table.php')
-            ->expectsOutputToContain('Published create_laravel_uploads_links_table.php')
+            ->expectsOutputToContain('Published create_laravel_uploads_tables.php')
             ->expectsOutputToContain('Laravel Uploads assets published successfully.')
             ->assertSuccessful();
 
         $this->assertFileExists(config_path('laravel-uploads.php'));
-        $this->assertCount(1, glob(database_path('migrations/*_create_laravel_uploads_uploads_table.php')) ?: []);
-        $this->assertCount(1, glob(database_path('migrations/*_create_laravel_uploads_links_table.php')) ?: []);
+        $this->assertCount(1, glob(database_path('migrations/*_create_laravel_uploads_tables.php')) ?: []);
     }
 }

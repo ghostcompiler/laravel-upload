@@ -47,35 +47,40 @@ class InstallCommand extends Command
 
     protected function publishMigrations(bool $force): void
     {
-        $migrations = [
-            'create_laravel_uploads_uploads_table.php' => dirname(__DIR__, 2).'/database/migrations/create_laravel_uploads_uploads_table.php.stub',
-            'create_laravel_uploads_links_table.php' => dirname(__DIR__, 2).'/database/migrations/create_laravel_uploads_links_table.php.stub',
+        $migrationName = 'create_laravel_uploads_tables.php';
+        $source = dirname(__DIR__, 2).'/database/migrations/create_laravel_uploads_tables.php.stub';
+        $legacyMigrations = [
+            'create_laravel_uploads_uploads_table.php',
+            'create_laravel_uploads_links_table.php',
         ];
 
-        $timestamp = time();
+        $existingFiles = glob(database_path('migrations/*_'.$migrationName)) ?: [];
 
-        foreach ($migrations as $migrationName => $source) {
-            $existingFiles = glob(database_path('migrations/*_'.$migrationName)) ?: [];
-
-            if ($existingFiles !== [] && ! $this->shouldOverwrite("Migration [{$migrationName}] already exists", $force)) {
-                $this->components->warn("Skipped migration {$migrationName}.");
-                $timestamp++;
-
-                continue;
-            }
-
-            foreach ($existingFiles as $existingFile) {
-                $this->files->delete($existingFile);
-            }
-
-            $target = database_path('migrations/'.date('Y_m_d_His', $timestamp).'_'.$migrationName);
-
-            $this->ensureDirectoryExists(dirname($target));
-            $this->files->copy($source, $target);
-
-            $this->components->info("Published {$migrationName}");
-            $timestamp++;
+        foreach ($legacyMigrations as $legacyMigration) {
+            $existingFiles = [
+                ...$existingFiles,
+                ...(glob(database_path('migrations/*_'.$legacyMigration)) ?: []),
+            ];
         }
+
+        $existingFiles = array_values(array_unique($existingFiles));
+
+        if ($existingFiles !== [] && ! $this->shouldOverwrite("Migration [{$migrationName}] already exists", $force)) {
+            $this->components->warn("Skipped migration {$migrationName}.");
+
+            return;
+        }
+
+        foreach ($existingFiles as $existingFile) {
+            $this->files->delete($existingFile);
+        }
+
+        $target = database_path('migrations/'.date('Y_m_d_His').'_'.$migrationName);
+
+        $this->ensureDirectoryExists(dirname($target));
+        $this->files->copy($source, $target);
+
+        $this->components->info("Published {$migrationName}");
     }
 
     protected function shouldOverwrite(string $label, bool $force): bool
