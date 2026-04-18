@@ -66,16 +66,18 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $this->createLink($upload, $expiry)->url();
     }
 
-    public function find(?int $id): ?Upload
+    public function find(int|string|null $id): ?Upload
     {
-        if (! $id) {
+        $id = $this->normalizeUploadId($id);
+
+        if ($id === null) {
             return null;
         }
 
         return Upload::query()->find($id);
     }
 
-    public function remove(Upload|int|null $upload): bool
+    public function remove(Upload|int|string|null $upload): bool
     {
         $upload = $upload instanceof Upload ? $upload : $this->find($upload);
 
@@ -94,12 +96,12 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return (bool) $upload->delete();
     }
 
-    public function delete(Upload|int|null $upload): bool
+    public function delete(Upload|int|string|null $upload): bool
     {
         return $this->remove($upload);
     }
 
-    public function urlFromId(?int $id, ?int $expiry = null): ?string
+    public function urlFromId(int|string|null $id, ?int $expiry = null): ?string
     {
         $upload = $this->find($id);
 
@@ -108,6 +110,23 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return $this->createLink($upload, $expiry)->url();
+    }
+
+    protected function normalizeUploadId(int|string|null $id): ?int
+    {
+        if ($id === null) {
+            return null;
+        }
+
+        if (is_string($id)) {
+            $id = trim($id);
+
+            if ($id === '' || ! ctype_digit($id)) {
+                return null;
+            }
+        }
+
+        return (int) $id;
     }
 
     protected function parseUploadArguments(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): array

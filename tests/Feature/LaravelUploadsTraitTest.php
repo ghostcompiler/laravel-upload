@@ -46,6 +46,30 @@ class LaravelUploadsTraitTest extends TestCase
         $this->assertStringContainsString('/_laravel-uploads/file/', $attributes['avatar']);
     }
 
+    public function test_it_accepts_string_backed_upload_ids_when_serializing_attributes(): void
+    {
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/avatar-string-id.png',
+            'original_name' => 'avatar-string-id.png',
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => 123,
+        ]);
+
+        $user = new TestUser();
+        $user->setRawAttributes([
+            'avatar_id' => (string) $upload->id,
+        ], true);
+
+        $attributes = $user->toArray();
+
+        $this->assertArrayNotHasKey('avatar_id', $attributes);
+        $this->assertArrayHasKey('avatar', $attributes);
+        $this->assertStringContainsString('/_laravel-uploads/file/', $attributes['avatar']);
+    }
+
     public function test_it_deletes_associated_files_when_the_model_is_deleted(): void
     {
         Storage::fake('local');
