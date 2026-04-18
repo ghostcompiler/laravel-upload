@@ -13,12 +13,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - php: "8.1"
-            laravel: "^9.0"
-            testbench: "^7.0"
-            phpunit: "^10.0"
-            dependency-flags: ""
-            experimental: false
           - php: "8.2"
             laravel: "^10.0"
             testbench: "^8.0"

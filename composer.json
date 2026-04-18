@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.1",
-        "illuminate/support": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0"
+        "illuminate/support": "^10.0 || ^11.0 || ^12.0 || ^13.0"
     },
     "suggest": {
         "ext-gd": "Used for image compression plus AVIF/WEBP conversion when supported by the PHP build.",
@@ -41,7 +41,7 @@
         "test": "vendor/bin/phpunit --configuration phpunit.xml.dist"
     },
     "require-dev": {
-        "orchestra/testbench": "^7.0 || ^8.0 || ^9.0 || ^10.0 || ^11.0@dev",
+        "orchestra/testbench": "^8.0 || ^9.0 || ^10.0 || ^11.0@dev",
         "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
     },
     "authors": [
