@@ -62,8 +62,8 @@ return [
         'max_height' => null,
         'max_input_width' => 8000,
         'max_input_height' => 8000,
-        'max_input_pixels' => 40000000,
-        'max_output_pixels' => 16000000,
+        'max_input_pixels' => 20000000,
+        'max_output_pixels' => 8000000,
     ],
 
     'preview_mime_types' => [

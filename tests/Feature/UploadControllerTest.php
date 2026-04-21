@@ -70,6 +70,39 @@ class UploadControllerTest extends TestCase
         $response->assertHeader('content-disposition', 'attachment; filename=report.pdf');
     }
 
+    public function test_it_sanitizes_download_filenames_before_setting_content_disposition(): void
+    {
+        Storage::fake('local');
+
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/report.txt',
+            'original_name' => "\";\r\nX-Injected: yes.txt",
+            'mime_type' => 'text/plain',
+            'extension' => 'txt',
+            'size' => 24,
+        ]);
+
+        Storage::disk('local')->put($upload->path, 'safe');
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('h', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', [
+            'token' => $link->token,
+            'download' => 1,
+        ]));
+
+        $response->assertOk();
+        $this->assertStringNotContainsString("\r", $response->headers->get('content-disposition') ?: '');
+        $this->assertStringNotContainsString("\n", $response->headers->get('content-disposition') ?: '');
+        $this->assertFalse($response->headers->has('X-Injected'));
+    }
+
     public function test_it_rejects_expired_links(): void
     {
         $upload = Upload::query()->create([

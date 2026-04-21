@@ -227,7 +227,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         $allowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.allowed_extensions', $options['allowed_extensions'] ?? null);
         $excludedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.excluded_mime_types', $options['excluded_mime_types'] ?? null);
         $excludedExtensions = $this->normalizeConfigList('laravel-uploads.validation.excluded_extensions', $options['excluded_extensions'] ?? null);
-        $neverAllowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.never_allowed_extensions', $options['never_allowed_extensions'] ?? null);
+        $neverAllowedExtensions = $this->neverAllowedExtensions();
         $allowedExcludedExtensions = $this->normalizeValueList($options['allow_excluded_extensions'] ?? []);
         $allowsExcludedExtension = $extension !== '' && in_array($extension, $allowedExcludedExtensions, true);
 
@@ -273,7 +273,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         [$width, $height] = $dimensions;
         $maxWidth = (int) config('laravel-uploads.image_optimization.max_input_width', 8000);
         $maxHeight = (int) config('laravel-uploads.image_optimization.max_input_height', 8000);
-        $maxPixels = (int) config('laravel-uploads.image_optimization.max_input_pixels', 40000000);
+        $maxPixels = (int) config('laravel-uploads.image_optimization.max_input_pixels', 20000000);
         $pixels = $width * $height;
 
         if (($maxWidth > 0 && $width > $maxWidth) || ($maxHeight > 0 && $height > $maxHeight) || ($maxPixels > 0 && $pixels > $maxPixels)) {
@@ -293,6 +293,19 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             fn ($value) => strtolower(trim((string) $value)),
             $values
         ), fn ($value) => $value !== ''));
+    }
+
+    protected function neverAllowedExtensions(): array
+    {
+        return array_values(array_unique([
+            ...$this->normalizeConfigList('laravel-uploads.validation.never_allowed_extensions'),
+            'phar',
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'phtml',
+        ]));
     }
 
     protected function normalizeValueList(mixed $values): array
@@ -979,9 +992,41 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function canAllocateImagePixels(int $width, int $height): bool
     {
-        $maxOutputPixels = (int) config('laravel-uploads.image_optimization.max_output_pixels', 16000000);
+        $maxOutputPixels = (int) config('laravel-uploads.image_optimization.max_output_pixels', 8000000);
 
-        return $maxOutputPixels <= 0 || ($width * $height) <= $maxOutputPixels;
+        if ($maxOutputPixels > 0 && ($width * $height) > $maxOutputPixels) {
+            return false;
+        }
+
+        $memoryLimit = $this->memoryLimitInBytes();
+
+        if ($memoryLimit === null) {
+            return true;
+        }
+
+        $availableMemory = $memoryLimit - memory_get_usage(true);
+        $requiredMemory = $width * $height * 5;
+
+        return $availableMemory > 0 && $requiredMemory < ($availableMemory * 0.8);
+    }
+
+    protected function memoryLimitInBytes(): ?int
+    {
+        $value = trim((string) ini_get('memory_limit'));
+
+        if ($value === '' || $value === '-1') {
+            return null;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $bytes = (int) $value;
+
+        return match ($unit) {
+            'g' => $bytes * 1024 * 1024 * 1024,
+            'm' => $bytes * 1024 * 1024,
+            'k' => $bytes * 1024,
+            default => $bytes,
+        };
     }
 
     protected function maxResizeWidth(): ?int

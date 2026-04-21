@@ -114,6 +114,22 @@ class LaravelUploadsManagerTest extends TestCase
         );
     }
 
+    public function test_it_never_allows_critical_extensions_even_when_options_try_to_override_the_critical_list(): void
+    {
+        Storage::fake('local');
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('extension [php] are never allowed');
+
+        app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('shell.php', 1, 'text/x-php'),
+            [
+                'allow_excluded_extensions' => ['php'],
+                'never_allowed_extensions' => [],
+            ]
+        );
+    }
+
     public function test_it_only_allows_the_requested_excluded_extension(): void
     {
         Storage::fake('local');

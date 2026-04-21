@@ -31,22 +31,23 @@ class UploadController extends Controller
         abort_if(! app(LaravelUploadsManager::class)->isSafeStoragePath($upload->path), 404);
 
         $disk = Storage::disk($upload->disk);
+        $downloadName = $this->safeDownloadName($upload->original_name);
         $download = $request->boolean('download');
         $previewable = $this->isPreviewable($upload->mime_type);
 
         if ($download || ! $previewable) {
-            return $disk->download($upload->path, $upload->original_name);
+            return $disk->download($upload->path, $downloadName);
         }
 
         if ($upload->visibility === 'public') {
-            return $disk->response($upload->path, $upload->original_name);
+            return $disk->response($upload->path, $downloadName);
         }
 
         return $disk->response(
             $upload->path,
-            $upload->original_name,
+            $downloadName,
             [
-                'Content-Disposition' => 'inline; filename="'.addslashes($upload->original_name).'"',
+                'Content-Disposition' => 'inline; filename="'.$downloadName.'"',
             ]
         );
     }
@@ -71,5 +72,14 @@ class UploadController extends Controller
         ]);
 
         return in_array($mimeType, $previewableMimeTypes, true);
+    }
+
+    protected function safeDownloadName(?string $name): string
+    {
+        $name = basename(str_replace('\\', '/', (string) $name));
+        $name = preg_replace('/[\x00-\x1F\x7F"\\\\]/', '', $name) ?: '';
+        $name = trim($name);
+
+        return $name !== '' ? $name : 'download';
     }
 }
