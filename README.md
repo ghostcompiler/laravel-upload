@@ -61,30 +61,6 @@ storage/app/private/LaravelUploads/demo/image
 composer require ghostcompiler/laravel-uploads
 ```
 
-### Install from a local package path
-
-If you are developing this package locally and want to use it inside a Laravel app without publishing it to Packagist, add a path repository to your Laravel project's `composer.json`:
-
-```json
-{
-    "repositories": [
-        {
-            "type": "path",
-            "url": "/absolute/path/to/laravel-uploads"
-        }
-    ],
-    "require": {
-        "ghostcompiler/laravel-uploads": "*"
-    }
-}
-```
-
-Then run:
-
-```bash
-composer update ghostcompiler/laravel-uploads
-```
-
 ## Package Install Command
 
 Publish config and package migrations:
