@@ -38,6 +38,16 @@ return [
             'rb',
             'sh',
         ],
+
+        // These extensions are always blocked, even when an upload call allows an excluded extension.
+        'never_allowed_extensions' => [
+            'phar',
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'phtml',
+        ],
     ],
 
     // When enabled, the package optimizes supported images for faster browser delivery.
@@ -53,6 +63,7 @@ return [
         'max_input_width' => 8000,
         'max_input_height' => 8000,
         'max_input_pixels' => 40000000,
+        'max_output_pixels' => 16000000,
     ],
 
     'preview_mime_types' => [

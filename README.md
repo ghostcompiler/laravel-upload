@@ -189,6 +189,24 @@ $upload = GhostCompiler()->upload($request->file('avatar'));
 $upload = GhostCompiler()->upload('demo/image', $request->file('avatar'));
 ```
 
+### Upload multiple files
+
+```php
+use GhostCompiler\LaravelUploads\Facades\Uploads;
+
+$uploads = Uploads::uploadMany($request->file('documents'), 'documents');
+```
+
+### Allow specific excluded extensions
+
+```php
+use GhostCompiler\LaravelUploads\Facades\Uploads;
+
+$upload = Uploads::upload($request->file('script'), ['sh', 'rb']);
+```
+
+Critical extensions configured in `validation.never_allowed_extensions`, such as `php`, `phar`, and `phtml`, cannot be allowed with this override.
+
 ### Save the upload ID on a model
 
 ```php
@@ -394,6 +412,14 @@ return [
             'rb',
             'sh',
         ],
+        'never_allowed_extensions' => [
+            'phar',
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'phtml',
+        ],
     ],
 
     'image_optimization' => [
@@ -405,6 +431,7 @@ return [
         'max_input_width' => 8000,
         'max_input_height' => 8000,
         'max_input_pixels' => 40000000,
+        'max_output_pixels' => 16000000,
     ],
 
     'preview_mime_types' => [
@@ -470,6 +497,10 @@ Mime types blocked by default. See [DEVELOPER.md](DEVELOPER.md) for per-upload e
 
 Extensions blocked by default. This list should include executable or script-like extensions such as `php`, `phtml`, `phar`, and `sh`.
 
+#### `validation.never_allowed_extensions`
+
+Extensions that cannot be bypassed by per-upload overrides.
+
 #### `image_optimization.enabled`
 
 Enable or disable global image optimization.
@@ -504,10 +535,14 @@ Maximum source image height allowed before optimization.
 
 Maximum source image pixel count allowed before optimization.
 
+#### `image_optimization.max_output_pixels`
+
+Maximum optimized image pixel count allowed before allocating a resized GD or Imagick image resource.
+
 #### `preview_mime_types`
 
 List of mime types that should open inline in the browser instead of downloading.
-SVG is not included by default because inline SVG can execute script in the application origin.
+SVG is not previewed inline by the package because inline SVG can execute script in the application origin.
 
 #### `delete_files_with_model`
 

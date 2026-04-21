@@ -55,7 +55,7 @@ class LaravelUploadsManagerTest extends TestCase
         Storage::fake('local');
 
         $this->expectException(LaravelUploadsException::class);
-        $this->expectExceptionMessage('are excluded');
+        $this->expectExceptionMessage('are never allowed');
 
         app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->create('shell.php', 1, 'text/x-php')
@@ -67,12 +67,51 @@ class LaravelUploadsManagerTest extends TestCase
         Storage::fake('local');
 
         $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('script.sh', 1, 'text/x-shellscript'),
+            'sh'
+        );
+
+        $this->assertSame('sh', $upload->extension);
+        Storage::disk('local')->assertExists($upload->path);
+    }
+
+    public function test_it_can_allow_multiple_specific_excluded_extensions_when_explicitly_requested(): void
+    {
+        Storage::fake('local');
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('script.sh', 1, 'text/x-shellscript'),
+            ['sh', 'rb']
+        );
+
+        $this->assertSame('sh', $upload->extension);
+        Storage::disk('local')->assertExists($upload->path);
+    }
+
+    public function test_it_never_allows_critical_excluded_extensions(): void
+    {
+        Storage::fake('local');
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('extension [php] are never allowed');
+
+        app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->create('shell.php', 1, 'text/x-php'),
             'php'
         );
+    }
 
-        $this->assertSame('php', $upload->extension);
-        Storage::disk('local')->assertExists($upload->path);
+    public function test_it_never_allows_critical_extensions_even_when_they_are_in_an_allowed_array(): void
+    {
+        Storage::fake('local');
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('extension [php] are never allowed');
+
+        app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('shell.php', 1, 'text/x-php'),
+            ['sh', 'php']
+        );
     }
 
     public function test_it_only_allows_the_requested_excluded_extension(): void
@@ -84,7 +123,7 @@ class LaravelUploadsManagerTest extends TestCase
 
         app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->create('script.sh', 1, 'text/x-shellscript'),
-            'php'
+            'rb'
         );
     }
 
@@ -94,13 +133,31 @@ class LaravelUploadsManagerTest extends TestCase
 
         $upload = app(LaravelUploadsManager::class)->upload(
             'trusted/path',
-            UploadedFile::fake()->create('shell.php', 1, 'text/x-php'),
-            'php'
+            UploadedFile::fake()->create('script.sh', 1, 'text/x-shellscript'),
+            'sh'
         );
 
-        $this->assertSame('php', $upload->extension);
+        $this->assertSame('sh', $upload->extension);
         $this->assertStringStartsWith('LaravelUploads/trusted/path/', $upload->path);
         Storage::disk('local')->assertExists($upload->path);
+    }
+
+    public function test_it_can_upload_many_files(): void
+    {
+        Storage::fake('local');
+
+        $uploads = app(LaravelUploadsManager::class)->uploadMany([
+            UploadedFile::fake()->create('first.pdf', 1, 'application/pdf'),
+            UploadedFile::fake()->create('second.txt', 1, 'text/plain'),
+        ], 'documents');
+
+        $this->assertCount(2, $uploads);
+        $this->assertContainsOnlyInstancesOf(Upload::class, $uploads);
+
+        foreach ($uploads as $upload) {
+            $this->assertStringStartsWith('LaravelUploads/documents/', $upload->path);
+            Storage::disk('local')->assertExists($upload->path);
+        }
     }
 
     public function test_it_rejects_upload_paths_with_traversal_segments(): void

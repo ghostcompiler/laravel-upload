@@ -17,10 +17,11 @@ class UploadController extends Controller
         $link = UploadLink::query()
             ->with('upload')
             ->where('token', $token)
-            ->firstOrFail();
+            ->first();
 
+        abort_if(! $link, 404);
         abort_if(! $link->upload, 404);
-        abort_if($link->expires_at && $link->expires_at->isPast(), 403);
+        abort_if($link->expires_at && $link->expires_at->isPast(), 404);
 
         $link->forceFill([
             'last_accessed_at' => now(),
@@ -53,6 +54,10 @@ class UploadController extends Controller
     protected function isPreviewable(?string $mimeType): bool
     {
         if (! $mimeType) {
+            return false;
+        }
+
+        if ($mimeType === 'image/svg+xml') {
             return false;
         }
 

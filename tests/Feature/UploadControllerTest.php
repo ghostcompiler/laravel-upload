@@ -89,7 +89,7 @@ class UploadControllerTest extends TestCase
         ]);
 
         $this->get(route('laravel-uploads.show', ['token' => $link->token]))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_it_downloads_svg_files_instead_of_previewing_them_inline_by_default(): void
@@ -120,6 +120,37 @@ class UploadControllerTest extends TestCase
         $link = UploadLink::query()->create([
             'upload_id' => $upload->id,
             'token' => str_repeat('s', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', ['token' => $link->token]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('attachment;', $response->headers->get('content-disposition') ?: '');
+    }
+
+    public function test_it_downloads_svg_files_even_when_svg_is_added_to_preview_config(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.preview_mime_types', [
+            'image/svg+xml',
+        ]);
+
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/configured-icon.svg',
+            'original_name' => 'configured-icon.svg',
+            'mime_type' => 'image/svg+xml',
+            'extension' => 'svg',
+            'size' => 120,
+        ]);
+
+        Storage::disk('local')->put($upload->path, '<svg><script>alert(1)</script></svg>');
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('g', 64),
             'expires_at' => now()->addMinutes(10),
         ]);
 

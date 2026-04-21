@@ -58,6 +58,22 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         ]);
     }
 
+    public function uploadMany(array $files, ?string $path = null, array|string|null $options = []): array
+    {
+        foreach ($files as $file) {
+            if (! $file instanceof UploadedFile) {
+                throw new LaravelUploadsException('LaravelUploads: Every file must be a valid uploaded file.');
+            }
+        }
+
+        return array_map(
+            fn (UploadedFile $file): Upload => $path === null
+                ? $this->upload($file, $options)
+                : $this->upload($path, $file, $options),
+            $files
+        );
+    }
+
     public function url(?Upload $upload, ?int $expiry = null): ?string
     {
         if (! $upload) {
@@ -140,7 +156,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
         if ($pathOrFile instanceof UploadedFile) {
             if (is_array($file)) {
-                $options = $file + $options;
+                $options = $this->normalizeUploadOptions($file) + $options;
             }
 
             if (is_string($file)) {
@@ -169,6 +185,12 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         if (is_string($options)) {
             return [
                 'allow_excluded_extensions' => [$options],
+            ];
+        }
+
+        if (array_is_list($options)) {
+            return [
+                'allow_excluded_extensions' => $options,
             ];
         }
 
@@ -205,8 +227,13 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         $allowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.allowed_extensions', $options['allowed_extensions'] ?? null);
         $excludedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.excluded_mime_types', $options['excluded_mime_types'] ?? null);
         $excludedExtensions = $this->normalizeConfigList('laravel-uploads.validation.excluded_extensions', $options['excluded_extensions'] ?? null);
+        $neverAllowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.never_allowed_extensions', $options['never_allowed_extensions'] ?? null);
         $allowedExcludedExtensions = $this->normalizeValueList($options['allow_excluded_extensions'] ?? []);
         $allowsExcludedExtension = $extension !== '' && in_array($extension, $allowedExcludedExtensions, true);
+
+        if ($extension !== '' && in_array($extension, $neverAllowedExtensions, true)) {
+            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are never allowed.");
+        }
 
         if (! $allowsExcludedExtension && $mimeType !== '' && in_array($mimeType, $excludedMimeTypes, true)) {
             throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are excluded.");
@@ -838,6 +865,17 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             ];
         }
 
+        if (! $this->canAllocateImagePixels($targetWidth, $targetHeight)) {
+            return [
+                'resource' => $source,
+                'resized' => false,
+                'original_width' => $originalWidth,
+                'original_height' => $originalHeight,
+                'width' => $originalWidth,
+                'height' => $originalHeight,
+            ];
+        }
+
         $resized = imagecreatetruecolor($targetWidth, $targetHeight);
 
         if ($resized === false) {
@@ -888,6 +926,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         [$targetWidth, $targetHeight] = $this->targetImageDimensions($originalWidth, $originalHeight);
 
         if ($targetWidth !== $originalWidth || $targetHeight !== $originalHeight) {
+            if (! $this->canAllocateImagePixels($targetWidth, $targetHeight)) {
+                return [
+                    'resized' => false,
+                    'original_width' => $originalWidth,
+                    'original_height' => $originalHeight,
+                    'width' => $originalWidth,
+                    'height' => $originalHeight,
+                ];
+            }
+
             $imagick->thumbnailImage($targetWidth, $targetHeight, true, false);
         }
 
@@ -927,6 +975,13 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         $targetHeight = max(1, (int) round($height * $ratio));
 
         return [$targetWidth, $targetHeight];
+    }
+
+    protected function canAllocateImagePixels(int $width, int $height): bool
+    {
+        $maxOutputPixels = (int) config('laravel-uploads.image_optimization.max_output_pixels', 16000000);
+
+        return $maxOutputPixels <= 0 || ($width * $height) <= $maxOutputPixels;
     }
 
     protected function maxResizeWidth(): ?int

@@ -61,6 +61,14 @@ Package validation is controlled by `config/laravel-uploads.php`.
         'rb',
         'sh',
     ],
+    'never_allowed_extensions' => [
+        'phar',
+        'php',
+        'php3',
+        'php4',
+        'php5',
+        'phtml',
+    ],
 ],
 ```
 
@@ -68,21 +76,45 @@ Empty `allowed_mime_types` and `allowed_extensions` lists mean all non-excluded 
 
 ## Explicit Excluded Extension Override
 
-Excluded files stay blocked by default. If your application has already performed its own authorization and validation, you can allow one excluded extension for one upload call.
+Excluded files stay blocked by default. If your application has already performed its own authorization and validation, you can allow one or more excluded extensions for one upload call.
 
 ```php
 use GhostCompiler\LaravelUploads\Facades\Uploads;
 
-$upload = Uploads::upload($request->file('archive'), 'php');
+$upload = Uploads::upload($request->file('script'), 'sh');
+```
+
+Allow multiple excluded extensions for one upload call:
+
+```php
+$upload = Uploads::upload($request->file('script'), ['sh', 'rb']);
 ```
 
 The same extension-specific override works with custom paths:
 
 ```php
-$upload = Uploads::upload('trusted/path', $request->file('script'), 'php');
+$upload = Uploads::upload('trusted/path', $request->file('script'), 'sh');
 ```
 
-Only the specified extension is allowed. For example, passing `'php'` does not allow `sh`, `phar`, or any other excluded extension.
+Only the specified extension is allowed. For example, passing `'sh'` does not allow `rb`, `phar`, or any other excluded extension.
+
+Critical extensions listed in `validation.never_allowed_extensions`, such as `php`, `phar`, and `phtml`, cannot be bypassed with per-upload overrides.
+
+## Multiple File Uploads
+
+Use `uploadMany()` when handling a request field containing multiple uploaded files.
+
+```php
+use GhostCompiler\LaravelUploads\Facades\Uploads;
+
+$uploads = Uploads::uploadMany($request->file('documents'), 'documents');
+```
+
+The third argument accepts the same extension override rules:
+
+```php
+$uploads = Uploads::uploadMany($request->file('scripts'), 'trusted/scripts', ['sh', 'rb']);
+```
 
 ## Image Processing Safety
 
@@ -98,6 +130,7 @@ Image optimization can reject oversized source images before GD or Imagick proce
     'max_input_width' => 8000,
     'max_input_height' => 8000,
     'max_input_pixels' => 40000000,
+    'max_output_pixels' => 16000000,
 ],
 ```
 
