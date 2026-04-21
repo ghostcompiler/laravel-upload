@@ -3,6 +3,7 @@
 namespace GhostCompiler\LaravelUploads\Http\Controllers;
 
 use GhostCompiler\LaravelUploads\Models\UploadLink;
+use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
@@ -26,6 +27,8 @@ class UploadController extends Controller
         ])->save();
 
         $upload = $link->upload;
+        abort_if(! app(LaravelUploadsManager::class)->isSafeStoragePath($upload->path), 404);
+
         $disk = Storage::disk($upload->disk);
         $download = $request->boolean('download');
         $previewable = $this->isPreviewable($upload->mime_type);
@@ -58,7 +61,6 @@ class UploadController extends Controller
             'image/png',
             'image/gif',
             'image/webp',
-            'image/svg+xml',
             'application/pdf',
             'text/plain',
         ]);

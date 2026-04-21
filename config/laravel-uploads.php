@@ -11,6 +11,35 @@ return [
         'expiry' => 60,
     ],
 
+    'validation' => [
+        // Maximum upload size in bytes. Set to null to disable the package-level size check.
+        'max_size' => 10 * 1024 * 1024,
+
+        // Leave allowed lists empty to allow all non-excluded files.
+        'allowed_mime_types' => [],
+        'allowed_extensions' => [],
+
+        // Excluded files are blocked unless the excluded extension is explicitly allowed per upload.
+        'excluded_mime_types' => [
+            'application/x-httpd-php',
+            'application/x-php',
+            'text/x-php',
+        ],
+        'excluded_extensions' => [
+            'cgi',
+            'phar',
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'phtml',
+            'pl',
+            'py',
+            'rb',
+            'sh',
+        ],
+    ],
+
     // When enabled, the package optimizes supported images for faster browser delivery.
     // It tries AVIF first and automatically falls back to WEBP when AVIF is unavailable.
     // If only max_width or max_height is set, the other dimension is calculated automatically
@@ -21,6 +50,9 @@ return [
         'convert_to_avif' => true,
         'max_width' => null,
         'max_height' => null,
+        'max_input_width' => 8000,
+        'max_input_height' => 8000,
+        'max_input_pixels' => 40000000,
     ],
 
     'preview_mime_types' => [
@@ -29,7 +61,6 @@ return [
         'image/png',
         'image/gif',
         'image/webp',
-        'image/svg+xml',
         'application/pdf',
         'text/plain',
     ],

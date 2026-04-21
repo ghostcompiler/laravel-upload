@@ -36,13 +36,7 @@ trait LaravelUploads
                 $deleteOnModelDelete = (bool) config('laravel-uploads.delete_files_with_model', false);
 
                 if ($deleteOnModelDelete) {
-                    $disk = app('filesystem')->disk($upload->disk);
-
-                    if ($disk->exists($upload->path)) {
-                        $disk->delete($upload->path);
-                    }
-
-                    $upload->delete();
+                    app(LaravelUploadsManager::class)->remove($upload);
                 }
             }
         });

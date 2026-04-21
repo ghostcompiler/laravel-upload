@@ -91,4 +91,63 @@ class UploadControllerTest extends TestCase
         $this->get(route('laravel-uploads.show', ['token' => $link->token]))
             ->assertForbidden();
     }
+
+    public function test_it_downloads_svg_files_instead_of_previewing_them_inline_by_default(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.preview_mime_types', [
+            'image/avif',
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+            'text/plain',
+        ]);
+
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/icon.svg',
+            'original_name' => 'icon.svg',
+            'mime_type' => 'image/svg+xml',
+            'extension' => 'svg',
+            'size' => 120,
+        ]);
+
+        Storage::disk('local')->put($upload->path, '<svg><script>alert(1)</script></svg>');
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('s', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', ['token' => $link->token]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('attachment;', $response->headers->get('content-disposition') ?: '');
+    }
+
+    public function test_it_rejects_unsafe_stored_paths(): void
+    {
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => '../.env',
+            'original_name' => '.env',
+            'mime_type' => 'text/plain',
+            'extension' => 'txt',
+            'size' => 120,
+        ]);
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('u', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $this->get(route('laravel-uploads.show', ['token' => $link->token]))
+            ->assertNotFound();
+    }
 }

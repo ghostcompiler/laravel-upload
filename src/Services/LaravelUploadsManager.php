@@ -14,9 +14,10 @@ use RuntimeException;
 
 class LaravelUploadsManager implements ResolvesUploadUrls
 {
-    public function upload(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): Upload
+    public function upload(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): Upload
     {
-        [$path, $file] = $this->parseUploadArguments($pathOrFile, $file);
+        [$path, $file, $options] = $this->parseUploadArguments($pathOrFile, $file, $options);
+        $this->validateUploadedFile($file, $options);
         $visibility = $this->defaultVisibility();
         $disk = $this->disk();
         $directory = $this->directoryFor($path);
@@ -87,6 +88,10 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
         $disk = Storage::disk($upload->disk);
 
+        if (! $this->isSafeStoragePath($upload->path)) {
+            return false;
+        }
+
         if ($disk->exists($upload->path)) {
             $disk->delete($upload->path);
         }
@@ -129,10 +134,20 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return (int) $id;
     }
 
-    protected function parseUploadArguments(UploadedFile|string $pathOrFile, ?UploadedFile $file = null): array
+    protected function parseUploadArguments(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): array
     {
+        $options = $this->normalizeUploadOptions($options);
+
         if ($pathOrFile instanceof UploadedFile) {
-            return [null, $pathOrFile];
+            if (is_array($file)) {
+                $options = $file + $options;
+            }
+
+            if (is_string($file)) {
+                $options = $this->normalizeUploadOptions($file) + $options;
+            }
+
+            return [null, $pathOrFile, $options];
         }
 
         if (! $file instanceof UploadedFile) {
@@ -142,7 +157,131 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             throw new LaravelUploadsException($message);
         }
 
-        return [$pathOrFile, $file];
+        return [$pathOrFile, $file, $options];
+    }
+
+    protected function normalizeUploadOptions(array|string|null $options): array
+    {
+        if ($options === null) {
+            return [];
+        }
+
+        if (is_string($options)) {
+            return [
+                'allow_excluded_extensions' => [$options],
+            ];
+        }
+
+        return $options;
+    }
+
+    protected function validateUploadedFile(UploadedFile $file, array $options = []): void
+    {
+        $this->validateUploadSize($file);
+        $this->validateUploadType($file, $options);
+        $this->validateImageDimensions($file);
+    }
+
+    protected function validateUploadSize(UploadedFile $file): void
+    {
+        $maxSize = config('laravel-uploads.validation.max_size');
+
+        if ($maxSize === null) {
+            return;
+        }
+
+        $maxSize = (int) $maxSize;
+
+        if ($maxSize > 0 && (int) $file->getSize() > $maxSize) {
+            throw new LaravelUploadsException("LaravelUploads: Uploaded file exceeds the maximum size of {$maxSize} bytes.");
+        }
+    }
+
+    protected function validateUploadType(UploadedFile $file, array $options = []): void
+    {
+        $mimeType = strtolower((string) ($file->getMimeType() ?: $file->getClientMimeType()));
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $allowedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.allowed_mime_types', $options['allowed_mime_types'] ?? null);
+        $allowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.allowed_extensions', $options['allowed_extensions'] ?? null);
+        $excludedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.excluded_mime_types', $options['excluded_mime_types'] ?? null);
+        $excludedExtensions = $this->normalizeConfigList('laravel-uploads.validation.excluded_extensions', $options['excluded_extensions'] ?? null);
+        $allowedExcludedExtensions = $this->normalizeValueList($options['allow_excluded_extensions'] ?? []);
+        $allowsExcludedExtension = $extension !== '' && in_array($extension, $allowedExcludedExtensions, true);
+
+        if (! $allowsExcludedExtension && $mimeType !== '' && in_array($mimeType, $excludedMimeTypes, true)) {
+            throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are excluded.");
+        }
+
+        if (! $allowsExcludedExtension && $extension !== '' && in_array($extension, $excludedExtensions, true)) {
+            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are excluded.");
+        }
+
+        if ($allowedMimeTypes !== [] && ($mimeType === '' || ! in_array($mimeType, $allowedMimeTypes, true))) {
+            throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are not allowed.");
+        }
+
+        if ($allowedExtensions !== [] && ($extension === '' || ! in_array($extension, $allowedExtensions, true))) {
+            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are not allowed.");
+        }
+    }
+
+    protected function validateImageDimensions(UploadedFile $file): void
+    {
+        if (! $this->shouldCompressImages() || ! $this->isCompressibleImage($file)) {
+            return;
+        }
+
+        $realPath = $file->getRealPath();
+
+        if (! is_string($realPath) || ! is_file($realPath)) {
+            return;
+        }
+
+        $dimensions = @getimagesize($realPath);
+
+        if ($dimensions === false) {
+            return;
+        }
+
+        [$width, $height] = $dimensions;
+        $maxWidth = (int) config('laravel-uploads.image_optimization.max_input_width', 8000);
+        $maxHeight = (int) config('laravel-uploads.image_optimization.max_input_height', 8000);
+        $maxPixels = (int) config('laravel-uploads.image_optimization.max_input_pixels', 40000000);
+        $pixels = $width * $height;
+
+        if (($maxWidth > 0 && $width > $maxWidth) || ($maxHeight > 0 && $height > $maxHeight) || ($maxPixels > 0 && $pixels > $maxPixels)) {
+            throw new LaravelUploadsException('LaravelUploads: Uploaded image dimensions exceed the configured safety limits.');
+        }
+    }
+
+    protected function normalizeConfigList(string $key, mixed $override = null): array
+    {
+        $values = $override ?? config($key, []);
+
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn ($value) => strtolower(trim((string) $value)),
+            $values
+        ), fn ($value) => $value !== ''));
+    }
+
+    protected function normalizeValueList(mixed $values): array
+    {
+        if (is_string($values)) {
+            $values = [$values];
+        }
+
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn ($value) => strtolower(trim((string) $value)),
+            $values
+        ), fn ($value) => $value !== ''));
     }
 
     protected function defaultVisibility(): string
@@ -159,10 +298,50 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function directoryFor(?string $path = null): string
     {
-        $basePath = trim((string) config('laravel-uploads.base_path', 'LaravelUploads'), '/');
-        $directory = trim((string) $path, '/');
+        $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
+        $directory = $this->normalizeRelativePath((string) $path, 'upload path', true);
 
         return $directory !== '' ? "{$basePath}/{$directory}" : $basePath;
+    }
+
+    protected function normalizeRelativePath(string $path, string $label, bool $allowEmpty = false): string
+    {
+        $originalPath = $path;
+        $path = trim(str_replace('\\', '/', $path), '/');
+
+        if ($path === '') {
+            if ($allowEmpty) {
+                return '';
+            }
+
+            throw new LaravelUploadsException("LaravelUploads: Invalid {$label}.");
+        }
+
+        if (str_starts_with($originalPath, '/') || str_starts_with($originalPath, '\\') || preg_match('/^[A-Za-z]:[\\\\\\/]/', $originalPath)) {
+            throw new LaravelUploadsException("LaravelUploads: Unsafe {$label}.");
+        }
+
+        $segments = explode('/', $path);
+
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..' || preg_match('/[\x00-\x1F\x7F]/', $segment)) {
+                throw new LaravelUploadsException("LaravelUploads: Unsafe {$label}.");
+            }
+        }
+
+        return implode('/', $segments);
+    }
+
+    public function isSafeStoragePath(string $path): bool
+    {
+        try {
+            $path = $this->normalizeRelativePath($path, 'storage path');
+            $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
+        } catch (LaravelUploadsException) {
+            return false;
+        }
+
+        return $path === $basePath || str_starts_with($path, "{$basePath}/");
     }
 
     protected function generateFilename(UploadedFile $file): string

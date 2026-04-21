@@ -380,6 +380,8 @@ php artisan ghost:laravel-uploads-clean --dry-run
 
 ## Config Guide
 
+For detailed validation, excluded-extension overrides, local path repository setup, and security-sensitive configuration, see [DEVELOPER.md](DEVELOPER.md).
+
 Published config file:
 
 ```php
@@ -394,12 +396,39 @@ return [
         'expiry' => 60,
     ],
 
+    'validation' => [
+        'max_size' => 10 * 1024 * 1024,
+        'allowed_mime_types' => [],
+        'allowed_extensions' => [],
+        'excluded_mime_types' => [
+            'application/x-httpd-php',
+            'application/x-php',
+            'text/x-php',
+        ],
+        'excluded_extensions' => [
+            'cgi',
+            'phar',
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'phtml',
+            'pl',
+            'py',
+            'rb',
+            'sh',
+        ],
+    ],
+
     'image_optimization' => [
         'enabled' => false,
         'quality' => 75,
         'convert_to_avif' => true,
         'max_width' => null,
         'max_height' => null,
+        'max_input_width' => 8000,
+        'max_input_height' => 8000,
+        'max_input_pixels' => 40000000,
     ],
 
     'preview_mime_types' => [
@@ -408,7 +437,6 @@ return [
         'image/png',
         'image/gif',
         'image/webp',
-        'image/svg+xml',
         'application/pdf',
         'text/plain',
     ],
@@ -432,6 +460,7 @@ Laravel disk used for storing package files.
 #### `base_path`
 
 Base folder inside the selected Laravel disk.
+Paths are normalized as relative disk paths, and unsafe segments like `..` are rejected.
 
 #### `defaults.type`
 
@@ -444,6 +473,26 @@ Controls whether the raw upload ID field should remain visible.
 #### `defaults.expiry`
 
 Default link expiry in minutes.
+
+#### `validation.max_size`
+
+Maximum upload size in bytes. Set to `null` to disable the package-level size check.
+
+#### `validation.allowed_mime_types`
+
+Optional mime allowlist. Leave empty to allow all non-excluded mime types.
+
+#### `validation.allowed_extensions`
+
+Optional extension allowlist. Leave empty to allow all non-excluded extensions.
+
+#### `validation.excluded_mime_types`
+
+Mime types blocked by default. See [DEVELOPER.md](DEVELOPER.md) for per-upload excluded-extension overrides.
+
+#### `validation.excluded_extensions`
+
+Extensions blocked by default. This list should include executable or script-like extensions such as `php`, `phtml`, `phar`, and `sh`.
 
 #### `image_optimization.enabled`
 
@@ -467,9 +516,22 @@ If set by itself, height is calculated automatically from the original aspect ra
 Optional maximum height for optimized images.
 If set by itself, width is calculated automatically from the original aspect ratio.
 
+#### `image_optimization.max_input_width`
+
+Maximum source image width allowed before optimization. This helps reject oversized image payloads before GD or Imagick allocates large image resources.
+
+#### `image_optimization.max_input_height`
+
+Maximum source image height allowed before optimization.
+
+#### `image_optimization.max_input_pixels`
+
+Maximum source image pixel count allowed before optimization.
+
 #### `preview_mime_types`
 
 List of mime types that should open inline in the browser instead of downloading.
+SVG is not included by default because inline SVG can execute script in the application origin.
 
 #### `delete_files_with_model`
 
@@ -585,12 +647,16 @@ Use a real Laravel test project and verify:
 - upload works with `Uploads::upload(...)`
 - upload works with `GhostCompiler()->upload(...)`
 - custom folder uploads work
+- excluded file validation blocks dangerous extensions
+- explicit excluded-extension upload override works only when requested
 - model serialization returns URL fields correctly
 - preview URL opens supported file types
+- SVG files download instead of opening inline by default
 - `?download=1` forces download
 - AVIF conversion works when supported
 - WEBP fallback works when AVIF is unavailable
 - resize limits preserve the original aspect ratio
+- oversized image dimensions are rejected before optimization
 - cleanup command removes only expired links
 
 ## Notes
@@ -598,6 +664,7 @@ Use a real Laravel test project and verify:
 - `Uploads::upload($file)` stores files in the configured `base_path`
 - `Uploads::upload('demo/image', $file)` stores files inside `base_path/demo/image`
 - `GhostCompiler()->upload($file)` uses the same Laravel Uploads service directly
+- upload paths must stay relative and cannot contain traversal segments
 - generated URLs are tracked in the database
 - image optimization only applies to supported images
 - AVIF is tried first
