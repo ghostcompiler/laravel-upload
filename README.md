@@ -29,7 +29,7 @@ It gives you:
 - clean URL fields like `avatar`
 - browser preview support
 - forced download support with `?download=1`
-- image optimization with AVIF, WEBP, and original-file fallback
+- image optimization with AVIF, WEBP, and guarded original-file fallback
 - optional aspect-ratio-safe resizing
 - expired link cleanup command
 
@@ -320,7 +320,7 @@ When enabled:
 
 - supported images try AVIF first
 - if AVIF is unavailable, the package falls back to WEBP
-- if neither conversion path works, the original file is stored
+- if neither conversion path works, the original file is stored only when strict mode is disabled and the fallback image remains within safety limits
 - resizing keeps the original aspect ratio
 - images are never upscaled
 - browser delivery becomes lighter and faster
@@ -346,6 +346,7 @@ To actually optimize images, enable it:
 ```php
 'image_optimization' => [
     'enabled' => true,
+    'strict' => false,
     'quality' => 75,
     'convert_to_avif' => true,
     'max_width' => 1600,
@@ -424,6 +425,7 @@ return [
 
     'image_optimization' => [
         'enabled' => false,
+        'strict' => false,
         'quality' => 75,
         'convert_to_avif' => true,
         'max_width' => null,
@@ -505,6 +507,10 @@ Extensions that cannot be bypassed by per-upload overrides.
 
 Enable or disable global image optimization.
 
+#### `image_optimization.strict`
+
+When enabled, supported image uploads fail if optimization cannot produce AVIF or WEBP output instead of falling back to the original file.
+
 #### `image_optimization.quality`
 
 Compression quality from `1` to `100`.
@@ -537,7 +543,7 @@ Maximum source image pixel count allowed before optimization.
 
 #### `image_optimization.max_output_pixels`
 
-Maximum optimized image pixel count allowed before allocating a resized GD or Imagick image resource.
+Maximum optimized image pixel count allowed before allocating a resized GD or Imagick image resource. When optimization falls back to the original file, the original image must also fit within this output pixel limit.
 
 #### `preview_mime_types`
 

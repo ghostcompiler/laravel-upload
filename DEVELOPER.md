@@ -123,6 +123,7 @@ Image optimization can reject oversized source images before GD or Imagick proce
 ```php
 'image_optimization' => [
     'enabled' => false,
+    'strict' => false,
     'quality' => 75,
     'convert_to_avif' => true,
     'max_width' => null,
@@ -135,6 +136,7 @@ Image optimization can reject oversized source images before GD or Imagick proce
 ```
 
 Set a max input dimension or pixel value to protect the PHP process from oversized image payloads.
+Set `strict` to `true` when an image upload should fail instead of storing the original file after AVIF/WEBP conversion fails.
 
 ## Path Safety
 

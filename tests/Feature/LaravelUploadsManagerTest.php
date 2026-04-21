@@ -88,6 +88,21 @@ class LaravelUploadsManagerTest extends TestCase
         Storage::disk('local')->assertExists($upload->path);
     }
 
+    public function test_explicitly_allowed_excluded_extensions_bypass_global_allowlists(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.validation.allowed_mime_types', ['image/png']);
+        config()->set('laravel-uploads.validation.allowed_extensions', ['png']);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('script.sh', 1, 'text/x-shellscript'),
+            'sh'
+        );
+
+        $this->assertSame('sh', $upload->extension);
+        Storage::disk('local')->assertExists($upload->path);
+    }
+
     public function test_it_never_allows_critical_excluded_extensions(): void
     {
         Storage::fake('local');
@@ -228,6 +243,51 @@ class LaravelUploadsManagerTest extends TestCase
 
         app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->image('huge.png', 101, 100)
+        );
+    }
+
+    public function test_it_rejects_failed_image_optimization_when_strict_mode_is_enabled(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.image_optimization.enabled', true);
+        config()->set('laravel-uploads.image_optimization.strict', true);
+
+        $manager = new class extends LaravelUploadsManager {
+            protected function convertOptimizedImage(UploadedFile $file): ?array
+            {
+                return null;
+            }
+        };
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('strict image optimization is enabled');
+
+        $manager->upload(
+            UploadedFile::fake()->image('avatar.png', 120, 120)
+        );
+    }
+
+    public function test_it_rejects_large_original_images_after_optimization_fallback(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.image_optimization.enabled', true);
+        config()->set('laravel-uploads.image_optimization.max_input_width', 0);
+        config()->set('laravel-uploads.image_optimization.max_input_height', 0);
+        config()->set('laravel-uploads.image_optimization.max_input_pixels', 0);
+        config()->set('laravel-uploads.image_optimization.max_output_pixels', 100);
+
+        $manager = new class extends LaravelUploadsManager {
+            protected function convertOptimizedImage(UploadedFile $file): ?array
+            {
+                return null;
+            }
+        };
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('output pixel limit');
+
+        $manager->upload(
+            UploadedFile::fake()->image('avatar.png', 11, 10)
         );
     }
 }

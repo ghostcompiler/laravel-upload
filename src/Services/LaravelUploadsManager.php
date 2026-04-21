@@ -243,11 +243,11 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are excluded.");
         }
 
-        if ($allowedMimeTypes !== [] && ($mimeType === '' || ! in_array($mimeType, $allowedMimeTypes, true))) {
+        if (! $allowsExcludedExtension && $allowedMimeTypes !== [] && ($mimeType === '' || ! in_array($mimeType, $allowedMimeTypes, true))) {
             throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are not allowed.");
         }
 
-        if ($allowedExtensions !== [] && ($extension === '' || ! in_array($extension, $allowedExtensions, true))) {
+        if (! $allowsExcludedExtension && $allowedExtensions !== [] && ($extension === '' || ! in_array($extension, $allowedExtensions, true))) {
             throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are not allowed.");
         }
     }
@@ -401,6 +401,12 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         $converted = $this->convertOptimizedImage($file);
 
         if ($converted === null) {
+            if ($this->strictImageOptimization()) {
+                throw new LaravelUploadsException('LaravelUploads: Image optimization failed and strict image optimization is enabled.');
+            }
+
+            $this->validateFallbackImageForStorage($file);
+
             return $this->prepareOriginalFileForStorage($file, [
                 'enabled' => true,
                 'applied' => false,
@@ -460,6 +466,11 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return (bool) config('laravel-uploads.image_optimization.enabled', false);
     }
 
+    protected function strictImageOptimization(): bool
+    {
+        return (bool) config('laravel-uploads.image_optimization.strict', false);
+    }
+
     protected function compressionQuality(): int
     {
         return max(1, min(100, (int) config('laravel-uploads.image_optimization.quality', 75)));
@@ -505,6 +516,33 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         Log::warning('LaravelUploads: Image optimization skipped. AVIF and WEBP conversion are unavailable. '.$this->avifSupportMessage().' '.$this->webpSupportMessage());
 
         return null;
+    }
+
+    protected function validateFallbackImageForStorage(UploadedFile $file): void
+    {
+        $maxOutputPixels = (int) config('laravel-uploads.image_optimization.max_output_pixels', 8000000);
+
+        if ($maxOutputPixels <= 0) {
+            return;
+        }
+
+        $realPath = $file->getRealPath();
+
+        if (! is_string($realPath) || ! is_file($realPath)) {
+            return;
+        }
+
+        $dimensions = @getimagesize($realPath);
+
+        if ($dimensions === false) {
+            return;
+        }
+
+        [$width, $height] = $dimensions;
+
+        if (($width * $height) > $maxOutputPixels) {
+            throw new LaravelUploadsException('LaravelUploads: Original image exceeds the configured output pixel limit after optimization fallback.');
+        }
     }
 
     protected function convertImageToAvif(UploadedFile $file): ?array

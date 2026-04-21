@@ -56,6 +56,7 @@ return [
     // from the original aspect ratio without stretching or upscaling the image.
     'image_optimization' => [
         'enabled' => false,
+        'strict' => false,
         'quality' => 75,
         'convert_to_avif' => true,
         'max_width' => null,
