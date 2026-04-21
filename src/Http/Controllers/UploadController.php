@@ -32,21 +32,22 @@ class UploadController extends Controller
 
         $disk = Storage::disk($upload->disk);
         $downloadName = $this->safeDownloadName($upload->original_name);
+        $headers = $this->securityHeaders();
         $download = $request->boolean('download');
         $previewable = $this->isPreviewable($upload->mime_type);
 
         if ($download || ! $previewable) {
-            return $disk->download($upload->path, $downloadName);
+            return $disk->download($upload->path, $downloadName, $headers);
         }
 
         if ($upload->visibility === 'public') {
-            return $disk->response($upload->path, $downloadName);
+            return $disk->response($upload->path, $downloadName, $headers);
         }
 
         return $disk->response(
             $upload->path,
             $downloadName,
-            [
+            $headers + [
                 'Content-Disposition' => 'inline; filename="'.$downloadName.'"',
             ]
         );
@@ -62,16 +63,20 @@ class UploadController extends Controller
             return false;
         }
 
-        $previewableMimeTypes = config('laravel-uploads.preview_mime_types', [
-            'image/jpeg',
-            'image/png',
-            'image/gif',
-            'image/webp',
-            'application/pdf',
-            'text/plain',
-        ]);
+        $previewableMimeTypes = config('laravel-uploads.preview_mime_types', []);
+
+        if (! is_array($previewableMimeTypes)) {
+            return false;
+        }
 
         return in_array($mimeType, $previewableMimeTypes, true);
+    }
+
+    protected function securityHeaders(): array
+    {
+        return [
+            'X-Content-Type-Options' => 'nosniff',
+        ];
     }
 
     protected function safeDownloadName(?string $name): string

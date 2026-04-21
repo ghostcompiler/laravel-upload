@@ -35,6 +35,7 @@ class UploadControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('content-disposition', 'inline; filename="readme.txt"');
+        $response->assertHeader('x-content-type-options', 'nosniff');
         $this->assertSame('hello world', $response->streamedContent());
         $this->assertNotNull($link->fresh()->last_accessed_at);
     }
@@ -68,6 +69,37 @@ class UploadControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('content-disposition', 'attachment; filename=report.pdf');
+        $response->assertHeader('x-content-type-options', 'nosniff');
+    }
+
+    public function test_it_downloads_files_when_preview_config_is_missing(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.preview_mime_types', null);
+
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/readme-no-config.txt',
+            'original_name' => 'readme-no-config.txt',
+            'mime_type' => 'text/plain',
+            'extension' => 'txt',
+            'size' => 12,
+        ]);
+
+        Storage::disk('local')->put($upload->path, 'hello world');
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('n', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', ['token' => $link->token]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('attachment;', $response->headers->get('content-disposition') ?: '');
+        $response->assertHeader('x-content-type-options', 'nosniff');
     }
 
     public function test_it_sanitizes_download_filenames_before_setting_content_disposition(): void
