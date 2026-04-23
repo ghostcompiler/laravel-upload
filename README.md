@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Built%20With-Laravel%20Storage-0F172A?style=for-the-badge" alt="Laravel Storage">
 </p>
 
-> A Laravel package for upload storage, secure file URLs, model-based URL fields, inline preview support, cleanup tools, and browser-focused image optimization.
+> A Laravel package for upload storage, secure file URLs, cached model-based URL fields, inline preview support, cleanup tools, and browser-focused image optimization.
 
 ## Overview
 
@@ -25,6 +25,7 @@ It gives you:
 - default file storage inside `LaravelUploads`
 - database tracking for uploaded files
 - database tracking for generated links
+- cached URL generation to avoid creating new link rows on every page refresh
 - model integration through one trait
 - clean URL fields like `avatar`
 - browser preview support
@@ -373,6 +374,15 @@ Preview how many expired links would be removed:
 php artisan ghost:laravel-uploads-clean --dry-run
 ```
 
+## URL Caching
+
+Generated file URLs are cached by upload ID and expiry time so repeated model serialization does not create a new `laravel_uploads_links` row on every request.
+
+- cache is enabled by default
+- cache lifetime matches the generated URL expiry time
+- if a page renders the same image URLs again on refresh, the package reuses the cached URL instead of generating a fresh database link
+- disabling cache restores the previous behavior of generating a new link for each request
+
 ## Config Guide
 
 For detailed validation, excluded-extension overrides, local path repository setup, and security-sensitive configuration, see [DEVELOPER.md](DEVELOPER.md).
@@ -389,6 +399,10 @@ return [
         'type' => 'private',
         'id' => 'hide',
         'expiry' => 60,
+    ],
+
+    'cache' => [
+        'enabled' => true,
     ],
 
     'validation' => [
@@ -478,6 +492,11 @@ Controls whether the raw upload ID field should remain visible.
 #### `defaults.expiry`
 
 Default link expiry in minutes.
+
+#### `cache.enabled`
+
+Enable or disable generated URL caching.
+When enabled, the package reuses the same generated URL until that URL expires, which helps prevent repeated upload-link queries and inserts during page refreshes.
 
 #### `validation.max_size`
 
@@ -651,6 +670,9 @@ composer test
 
 ### Current test coverage
 
+- cached URL reuse until expiry
+- cache invalidation when uploads are deleted
+- cache-disabled fallback behavior
 - resize dimension calculation
 - aspect-ratio preservation
 - no upscaling behavior
@@ -667,6 +689,7 @@ Use a real Laravel test project and verify:
 - excluded file validation blocks dangerous extensions
 - explicit excluded-extension upload override works only when requested
 - model serialization returns URL fields correctly
+- cached URL reuse prevents repeated link generation on refresh
 - preview URL opens supported file types
 - SVG files download instead of opening inline by default
 - `?download=1` forces download
@@ -683,6 +706,7 @@ Use a real Laravel test project and verify:
 - `GhostCompiler()->upload($file)` uses the same Laravel Uploads service directly
 - upload paths must stay relative and cannot contain traversal segments
 - generated URLs are tracked in the database
+- generated URLs are cached by upload ID and expiry when `cache.enabled` is `true`
 - image optimization only applies to supported images
 - AVIF is tried first
 - WEBP is used as the main fallback format
@@ -699,3 +723,29 @@ Before opening a pull request, please check:
 - new config options are documented
 - README is updated when behavior changes
 - no unrelated files are included
+
+## Development And Build Environment
+
+This package was developed using **ServBay** as the local development environment.
+
+### Development Tool Used
+
+- Local development tool: `ServBay`
+- Website: [www.servbay.com](https://www.servbay.com/)
+
+### ServBay Assets
+
+ServBay logo and icon are included in this repository for README rendering.
+
+<p>
+  <img src="assets/servbay/servbay-logo-black-512.png" alt="ServBay Logo" width="220">
+</p>
+
+<p>
+  <img src="assets/servbay/servbay-icon-blue-512.png" alt="ServBay Icon" width="96">
+</p>
+
+### Testing And Build Machine
+
+- Tested on: `Mac M4`
+- Built on: `Mac M4`
