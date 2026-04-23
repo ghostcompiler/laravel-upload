@@ -50,6 +50,60 @@ class LaravelUploadsManagerTest extends TestCase
         $this->assertDatabaseMissing('laravel_uploads_links', ['id' => $link->id]);
     }
 
+    public function test_it_reuses_cached_urls_until_their_expiry(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.cache.enabled', true);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('cached.pdf', 24, 'application/pdf')
+        );
+
+        $firstUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+        $secondUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+
+        $this->assertSame($firstUrl, $secondUrl);
+        $this->assertSame(1, UploadLink::query()->count());
+
+        $this->travel(16)->minutes();
+
+        $thirdUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+
+        $this->assertNotSame($firstUrl, $thirdUrl);
+        $this->assertSame(2, UploadLink::query()->count());
+    }
+
+    public function test_it_can_disable_generated_url_caching(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.cache.enabled', false);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('uncached.pdf', 24, 'application/pdf')
+        );
+
+        $firstUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+        $secondUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+
+        $this->assertNotSame($firstUrl, $secondUrl);
+        $this->assertSame(2, UploadLink::query()->count());
+    }
+
+    public function test_it_clears_cached_urls_when_an_upload_is_removed(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.cache.enabled', true);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('removed.pdf', 24, 'application/pdf')
+        );
+
+        $this->assertNotNull(app(LaravelUploadsManager::class)->urlFromId($upload->id, 15));
+
+        $this->assertTrue(app(LaravelUploadsManager::class)->remove($upload->id));
+        $this->assertNull(app(LaravelUploadsManager::class)->urlFromId($upload->id, 15));
+    }
+
     public function test_it_rejects_excluded_file_extensions_by_default(): void
     {
         Storage::fake('local');

@@ -11,6 +11,12 @@ return [
         'expiry' => 60,
     ],
 
+    // Cache generated file URLs so repeated model serialization does not create
+    // a new UploadLink row on every request. Cache lifetime matches the URL expiry.
+    'cache' => [
+        'enabled' => true,
+    ],
+
     'validation' => [
         // Maximum upload size in bytes. Set to null to disable the package-level size check.
         'max_size' => 10 * 1024 * 1024,

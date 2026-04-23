@@ -7,6 +7,7 @@ use GhostCompiler\LaravelUploads\Exceptions\LaravelUploadsException;
 use GhostCompiler\LaravelUploads\Models\Upload;
 use GhostCompiler\LaravelUploads\Models\UploadLink;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -80,7 +81,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        return $this->createLink($upload, $expiry)->url();
+        return $this->resolveUrlForUploadId((int) $upload->getKey(), $expiry, $upload);
     }
 
     public function find(int|string|null $id): ?Upload
@@ -101,6 +102,8 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         if (! $upload) {
             return false;
         }
+
+        $this->forgetCachedUrlsForUploadId((int) $upload->getKey());
 
         $disk = Storage::disk($upload->disk);
 
@@ -124,13 +127,13 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     public function urlFromId(int|string|null $id, ?int $expiry = null): ?string
     {
-        $upload = $this->find($id);
+        $id = $this->normalizeUploadId($id);
 
-        if (! $upload) {
+        if ($id === null) {
             return null;
         }
 
-        return $this->createLink($upload, $expiry)->url();
+        return $this->resolveUrlForUploadId($id, $expiry);
     }
 
     protected function normalizeUploadId(int|string|null $id): ?int
@@ -1115,14 +1118,102 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return implode(' ', array_unique($reasons));
     }
 
+    protected function resolveUrlForUploadId(int $uploadId, ?int $expiry = null, ?Upload $upload = null): ?string
+    {
+        $minutes = $this->resolveLinkExpiryMinutes($expiry);
+        $cacheEnabled = $this->shouldCacheGeneratedUrls() && $minutes > 0;
+        $cacheKey = $this->uploadUrlCacheKey($uploadId, $minutes);
+
+        if ($cacheEnabled) {
+            $cachedUrl = Cache::get($cacheKey);
+
+            if (is_string($cachedUrl) && $cachedUrl !== '') {
+                return $cachedUrl;
+            }
+        }
+
+        $upload ??= $this->find($uploadId);
+
+        if (! $upload) {
+            return null;
+        }
+
+        $link = $this->createLink($upload, $minutes);
+        $url = $link->url();
+
+        if ($cacheEnabled && $link->expires_at) {
+            Cache::put($cacheKey, $url, $link->expires_at);
+            $this->rememberUploadUrlCacheKey($uploadId, $cacheKey);
+        }
+
+        return $url;
+    }
+
     protected function createLink(Upload $upload, ?int $expiry = null): UploadLink
     {
-        $minutes = $expiry ?? (int) config('laravel-uploads.defaults.expiry', 60);
+        $minutes = $this->resolveLinkExpiryMinutes($expiry);
 
         return UploadLink::query()->create([
             'upload_id' => $upload->id,
             'token' => Str::random(64),
             'expires_at' => now()->addMinutes($minutes),
         ]);
+    }
+
+    protected function resolveLinkExpiryMinutes(?int $expiry = null): int
+    {
+        $minutes = $expiry ?? (int) config('laravel-uploads.defaults.expiry', 60);
+
+        return max(0, $minutes);
+    }
+
+    protected function shouldCacheGeneratedUrls(): bool
+    {
+        return (bool) config('laravel-uploads.cache.enabled', true);
+    }
+
+    protected function uploadUrlCacheKey(int $uploadId, int $minutes): string
+    {
+        return "laravel-uploads:url:{$uploadId}:{$minutes}";
+    }
+
+    protected function uploadUrlCacheRegistryKey(int $uploadId): string
+    {
+        return "laravel-uploads:url-keys:{$uploadId}";
+    }
+
+    protected function rememberUploadUrlCacheKey(int $uploadId, string $cacheKey): void
+    {
+        $registryKey = $this->uploadUrlCacheRegistryKey($uploadId);
+        $cacheKeys = Cache::get($registryKey, []);
+
+        if (! is_array($cacheKeys)) {
+            $cacheKeys = [];
+        }
+
+        if (! in_array($cacheKey, $cacheKeys, true)) {
+            $cacheKeys[] = $cacheKey;
+            Cache::forever($registryKey, $cacheKeys);
+        }
+    }
+
+    protected function forgetCachedUrlsForUploadId(int $uploadId): void
+    {
+        if (! $this->shouldCacheGeneratedUrls()) {
+            return;
+        }
+
+        $registryKey = $this->uploadUrlCacheRegistryKey($uploadId);
+        $cacheKeys = Cache::pull($registryKey, []);
+
+        if (! is_array($cacheKeys)) {
+            return;
+        }
+
+        foreach ($cacheKeys as $cacheKey) {
+            if (is_string($cacheKey) && $cacheKey !== '') {
+                Cache::forget($cacheKey);
+            }
+        }
     }
 }

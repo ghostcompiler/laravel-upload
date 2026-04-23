@@ -55,14 +55,20 @@ trait LaravelUploads
             return null;
         }
 
-        return app(LaravelUploadsManager::class)->url(
-            $this->resolveUploadFromColumn($column),
+        return app(LaravelUploadsManager::class)->urlFromId(
+            $this->getRawOriginal($column),
             $config['expiry']
         );
     }
 
     public function resolveUploadFromColumn(string $column): ?Upload
     {
+        if ($this->relationLoaded($column)) {
+            $related = $this->getRelation($column);
+
+            return $related instanceof Upload ? $related : null;
+        }
+
         $id = $this->getRawOriginal($column) ?? parent::getAttribute($column);
 
         if (! $id) {
