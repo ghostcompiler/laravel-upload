@@ -733,13 +733,7 @@ This package was developed using **ServBay** as the local development environmen
 - Local development tool: `ServBay`
 - Website: [www.servbay.com](https://www.servbay.com/)
 
-### ServBay Assets
-
-ServBay logo and icon are included in this repository for README rendering.
-
-<p>
-  <img src="assets/servbay/servbay-logo-black-512.png" alt="ServBay Logo" width="220">
-</p>
+### ServBay your developement friend
 
 <p>
   <img src="assets/servbay/servbay-icon-blue-512.png" alt="ServBay Icon" width="96">

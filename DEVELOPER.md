@@ -9,13 +9,7 @@ This package was developed using **ServBay** as the local development environmen
 - Local development tool: `ServBay`
 - Website: [www.servbay.com](https://www.servbay.com/)
 
-### ServBay Assets
-
-ServBay logo and icon are included in this repository for documentation rendering.
-
-<p>
-  <img src="assets/servbay/servbay-logo-black-512.png" alt="ServBay Logo" width="220">
-</p>
+### ServBay your developement friend
 
 <p>
   <img src="assets/servbay/servbay-icon-blue-512.png" alt="ServBay Icon" width="96">
@@ -25,6 +19,13 @@ ServBay logo and icon are included in this repository for documentation renderin
 
 - Tested on: `Mac M4`
 - Built on: `Mac M4`
+
+
+### Testing And Build Machine
+
+- Tested on: `Mac M4`
+- Built on: `Mac M4`
+
 
 This guide covers package-level configuration, validation, and security-sensitive upload behavior.
 
