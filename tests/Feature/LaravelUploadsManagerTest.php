@@ -9,6 +9,7 @@ use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use GhostCompiler\LaravelUploads\Tests\TestCase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class LaravelUploadsManagerTest extends TestCase
 {
@@ -245,6 +246,82 @@ class LaravelUploadsManagerTest extends TestCase
         }
     }
 
+    public function test_upload_to_field_applies_visibility_and_favicon_processing(): void
+    {
+        Storage::fake('local');
+
+        $user = new UploadableUser();
+        $upload = $user->uploadToField(
+            'avatar_id',
+            UploadedFile::fake()->image('avatar.png', 120, 60),
+            'icons'
+        );
+
+        $this->assertSame($upload->id, $user->getRawOriginal('avatar_id'));
+        $this->assertSame('public', $upload->visibility);
+        $this->assertSame('png', $upload->extension);
+        $this->assertSame('favicon', $upload->metadata['compression']['variant']);
+        $this->assertStringStartsWith('LaravelUploads/icons/', $upload->path);
+        Storage::disk('local')->assertExists($upload->path);
+    }
+
+    public function test_favicon_variant_keeps_existing_ico_uploads_without_conversion(): void
+    {
+        Storage::fake('local');
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('favicon.ico', 1, 'image/x-icon'),
+            [
+                'variant' => 'favicon',
+            ]
+        );
+
+        $this->assertSame('ico', $upload->extension);
+        $this->assertFalse($upload->metadata['compression']['applied']);
+        $this->assertSame('favicon', $upload->metadata['compression']['variant']);
+        Storage::disk('local')->assertExists($upload->path);
+    }
+
+    public function test_favicon_variant_rejects_oversized_source_images_before_conversion(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.image_optimization.enabled', false);
+        config()->set('laravel-uploads.image_optimization.max_input_width', 100);
+        config()->set('laravel-uploads.image_optimization.max_input_height', 100);
+        config()->set('laravel-uploads.image_optimization.max_input_pixels', 10000);
+
+        $this->expectException(LaravelUploadsException::class);
+        $this->expectExceptionMessage('image dimensions exceed');
+
+        app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->image('favicon.png', 101, 100),
+            [
+                'variant' => 'favicon',
+            ]
+        );
+    }
+
+    public function test_it_does_not_create_upload_records_when_storage_fails(): void
+    {
+        $manager = new class extends LaravelUploadsManager {
+            protected function storePreparedFile(string $disk, string $path, mixed $stream): void
+            {
+                throw new RuntimeException('Unable to store the prepared upload file.');
+            }
+        };
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to store the prepared upload file.');
+
+        try {
+            $manager->upload(
+                UploadedFile::fake()->create('contract.pdf', 24, 'application/pdf')
+            );
+        } finally {
+            $this->assertDatabaseCount('laravel_uploads_uploads', 0);
+        }
+    }
+
     public function test_it_rejects_upload_paths_with_traversal_segments(): void
     {
         Storage::fake('local');
@@ -343,5 +420,37 @@ class LaravelUploadsManagerTest extends TestCase
         $manager->upload(
             UploadedFile::fake()->image('avatar.png', 11, 10)
         );
+    }
+}
+
+class UploadableUser
+{
+    use \GhostCompiler\LaravelUploads\Concerns\LaravelUploads;
+
+    protected array $attributes = [];
+
+    protected array $hidden = [];
+
+    protected $uploadable = [
+        'avatar_id' => [
+            'name' => 'avatar',
+            'visibility' => 'public',
+            'variant' => 'favicon',
+            'id' => 'hide',
+            'expiry' => 60,
+            'expose' => true,
+        ],
+    ];
+
+    public function setAttribute($key, $value)
+    {
+        $this->attributes[$key] = $value;
+
+        return $this;
+    }
+
+    public function getRawOriginal($key)
+    {
+        return $this->attributes[$key] ?? null;
     }
 }

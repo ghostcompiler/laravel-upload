@@ -152,9 +152,18 @@ class User extends Authenticatable
     protected $uploadable = [
         'avatar_id' => [
             'name' => 'avatar',
-            'type' => 'public',
+            'visibility' => 'public',
             'id' => 'hide',
             'expiry' => 60,
+            'expose' => true,
+        ],
+        'favicon_id' => [
+            'name' => 'favicon',
+            'visibility' => 'public',
+            'variant' => 'favicon',
+            'id' => 'hide',
+            'expiry' => 60,
+            'expose' => true,
         ],
     ];
 }
@@ -215,6 +224,20 @@ $user->avatar_id = $upload->id;
 $user->save();
 ```
 
+### Upload directly to a configured model field
+
+```php
+$user->uploadToField('avatar_id', $request->file('avatar'), 'avatars');
+$user->save();
+```
+
+This applies the field configuration automatically:
+
+- `visibility` controls stored upload visibility
+- `variant: favicon` keeps `.ico` uploads as-is
+- `variant: favicon` converts regular JPEG, PNG, and WEBP images into a square favicon PNG
+- `type` still works as a legacy alias for `public`, `private`, or `favicon`
+
 ### Read the file URL from the model
 
 ```php
@@ -266,6 +289,7 @@ If `avatar_id` is mapped like:
 ```php
 'avatar_id' => [
     'name' => 'avatar',
+    'expose' => true,
 ]
 ```
 
@@ -297,7 +321,6 @@ Preview currently supports:
 - `image/png`
 - `image/gif`
 - `image/webp`
-- `image/svg+xml`
 - `application/pdf`
 - `text/plain`
 
@@ -396,9 +419,12 @@ return [
     'base_path' => 'LaravelUploads',
 
     'defaults' => [
+        'visibility' => 'private',
         'type' => 'private',
         'id' => 'hide',
         'expiry' => 60,
+        'expose' => false,
+        'variant' => null,
     ],
 
     'cache' => [
@@ -446,8 +472,16 @@ return [
         'max_height' => null,
         'max_input_width' => 8000,
         'max_input_height' => 8000,
-        'max_input_pixels' => 20000000,
-        'max_output_pixels' => 8000000,
+        'max_input_pixels' => 12000000,
+        'max_output_pixels' => 4000000,
+    ],
+
+    'favicon' => [
+        'size' => 64,
+    ],
+
+    'downloads' => [
+        'use_original_name' => false,
     ],
 
     'preview_mime_types' => [
@@ -481,9 +515,13 @@ Laravel disk used for storing package files.
 Base folder inside the selected Laravel disk.
 Paths are normalized as relative disk paths, and unsafe segments like `..` are rejected.
 
-#### `defaults.type`
+#### `defaults.visibility`
 
 Default upload visibility metadata used by the package.
+
+#### `defaults.type`
+
+Legacy alias for `defaults.visibility`.
 
 #### `defaults.id`
 
@@ -492,6 +530,11 @@ Controls whether the raw upload ID field should remain visible.
 #### `defaults.expiry`
 
 Default link expiry in minutes.
+
+#### `defaults.expose`
+
+Controls whether `attributesToArray()` automatically appends a signed URL for the mapped field.
+This is disabled by default so upload URLs are not leaked accidentally in JSON responses.
 
 #### `cache.enabled`
 
@@ -564,6 +607,15 @@ Maximum source image pixel count allowed before optimization.
 
 Maximum optimized image pixel count allowed before allocating a resized GD or Imagick image resource. When optimization falls back to the original file, the original image must also fit within this output pixel limit.
 
+#### `favicon.size`
+
+Target square size used when the `favicon` variant converts a normal image into a favicon PNG.
+
+#### `downloads.use_original_name`
+
+If disabled, download responses use a generated safe filename like `upload-15.pdf` instead of the original uploaded filename.
+Enable this only when exposing the original filename is acceptable for your app.
+
 #### `preview_mime_types`
 
 List of mime types that should open inline in the browser instead of downloading.
@@ -585,133 +637,9 @@ Laravel route name used internally by the package.
 
 Middleware applied to generated file serving routes.
 
-## Local Development
+## Developer Setup
 
-### Use this package inside a local Laravel app
-
-1. Add a Composer path repository in the Laravel app.
-2. Require `ghostcompiler/laravel-uploads`.
-3. Run:
-
-```bash
-composer update ghostcompiler/laravel-uploads
-php artisan package:discover
-php artisan ghost:laravel-uploads
-php artisan migrate
-```
-
-### Pull latest package changes into the Laravel app
-
-When you make changes in this package repo and want your Laravel app to use them:
-
-```bash
-composer update ghostcompiler/laravel-uploads
-php artisan package:discover
-```
-
-If you changed helper autoloading or package metadata, this is also useful:
-
-```bash
-composer dump-autoload
-```
-
-If you changed the published config or migration stubs:
-
-```bash
-php artisan ghost:laravel-uploads
-```
-
-Overwrite existing published files without prompts:
-
-```bash
-php artisan ghost:laravel-uploads --force
-```
-
-### Recommended pull / push workflow
-
-Inside the package repo:
-
-```bash
-git pull
-```
-
-Make your changes, then:
-
-```bash
-git add .
-git commit -m "Update Laravel Uploads"
-git push
-```
-
-Inside the Laravel app using the local path repository:
-
-```bash
-composer update ghostcompiler/laravel-uploads
-php artisan package:discover
-```
-
-## Testing
-
-This package now includes a PHPUnit + Testbench scaffold.
-
-### Install dev dependencies
-
-Inside the package repo:
-
-```bash
-composer install
-```
-
-### Run tests
-
-```bash
-composer test
-```
-
-### Current test coverage
-
-- cached URL reuse until expiry
-- cache invalidation when uploads are deleted
-- cache-disabled fallback behavior
-- resize dimension calculation
-- aspect-ratio preservation
-- no upscaling behavior
-- expired link cleanup command
-- dry-run cleanup reporting
-
-### Suggested manual testing in a Laravel app
-
-Use a real Laravel test project and verify:
-
-- upload works with `Uploads::upload(...)`
-- upload works with `GhostCompiler()->upload(...)`
-- custom folder uploads work
-- excluded file validation blocks dangerous extensions
-- explicit excluded-extension upload override works only when requested
-- model serialization returns URL fields correctly
-- cached URL reuse prevents repeated link generation on refresh
-- preview URL opens supported file types
-- SVG files download instead of opening inline by default
-- `?download=1` forces download
-- AVIF conversion works when supported
-- WEBP fallback works when AVIF is unavailable
-- resize limits preserve the original aspect ratio
-- oversized image dimensions are rejected before optimization
-- cleanup command removes only expired links
-
-## Notes
-
-- `Uploads::upload($file)` stores files in the configured `base_path`
-- `Uploads::upload('demo/image', $file)` stores files inside `base_path/demo/image`
-- `GhostCompiler()->upload($file)` uses the same Laravel Uploads service directly
-- upload paths must stay relative and cannot contain traversal segments
-- generated URLs are tracked in the database
-- generated URLs are cached by upload ID and expiry when `cache.enabled` is `true`
-- image optimization only applies to supported images
-- AVIF is tried first
-- WEBP is used as the main fallback format
-- resizing keeps the original aspect ratio
-- GD is used first and `Imagick` is used as a fallback encoder when available
+Local Laravel app setup, path-repository workflow, package testing, and contributor notes now live in [DEVELOPER.md](DEVELOPER.md).
 
 ## Contribution Checklist
 

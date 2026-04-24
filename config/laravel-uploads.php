@@ -6,9 +6,12 @@ return [
     'base_path' => 'LaravelUploads',
 
     'defaults' => [
+        'visibility' => 'private',
         'type' => 'private',
         'id' => 'hide',
         'expiry' => 60,
+        'expose' => false,
+        'variant' => null,
     ],
 
     // Cache generated file URLs so repeated model serialization does not create
@@ -45,7 +48,6 @@ return [
             'sh',
         ],
 
-        // These extensions are always blocked, even when an upload call allows an excluded extension.
         'never_allowed_extensions' => [
             'phar',
             'php',
@@ -69,8 +71,16 @@ return [
         'max_height' => null,
         'max_input_width' => 8000,
         'max_input_height' => 8000,
-        'max_input_pixels' => 20000000,
-        'max_output_pixels' => 8000000,
+        'max_input_pixels' => 12000000,
+        'max_output_pixels' => 4000000,
+    ],
+
+    'favicon' => [
+        'size' => 64,
+    ],
+
+    'downloads' => [
+        'use_original_name' => false,
     ],
 
     'preview_mime_types' => [

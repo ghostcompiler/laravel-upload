@@ -70,6 +70,29 @@ class LaravelUploadsTraitTest extends TestCase
         $this->assertStringContainsString('/_laravel-uploads/file/', $attributes['avatar']);
     }
 
+    public function test_it_does_not_expose_upload_urls_in_serialized_attributes_by_default(): void
+    {
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/avatar-hidden.png',
+            'original_name' => 'avatar-hidden.png',
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => 123,
+        ]);
+
+        $user = SecureTestUser::query()->create([
+            'avatar_id' => $upload->id,
+        ]);
+
+        $attributes = $user->fresh()->toArray();
+
+        $this->assertArrayNotHasKey('avatar_id', $attributes);
+        $this->assertArrayNotHasKey('avatar', $attributes);
+        $this->assertStringContainsString('/_laravel-uploads/file/', $user->fresh()->avatar);
+    }
+
     public function test_it_deletes_associated_files_when_the_model_is_deleted(): void
     {
         Storage::fake('local');
@@ -109,6 +132,26 @@ class TestUser extends Model
     protected $uploadable = [
         'avatar_id' => [
             'name' => 'avatar',
+            'visibility' => 'private',
+            'id' => 'hide',
+            'expiry' => 60,
+            'expose' => true,
+        ],
+    ];
+}
+
+class SecureTestUser extends Model
+{
+    use LaravelUploads;
+
+    protected $table = 'test_users';
+
+    protected $guarded = [];
+
+    protected $uploadable = [
+        'avatar_id' => [
+            'name' => 'avatar',
+            'visibility' => 'private',
             'id' => 'hide',
             'expiry' => 60,
         ],

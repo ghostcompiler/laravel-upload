@@ -34,7 +34,7 @@ class UploadControllerTest extends TestCase
         $response = $this->get(route('laravel-uploads.show', ['token' => $link->token]));
 
         $response->assertOk();
-        $response->assertHeader('content-disposition', 'inline; filename="readme.txt"');
+        $response->assertHeader('content-disposition', 'inline; filename="upload-1.txt"');
         $response->assertHeader('x-content-type-options', 'nosniff');
         $this->assertSame('hello world', $response->streamedContent());
         $this->assertNotNull($link->fresh()->last_accessed_at);
@@ -68,7 +68,7 @@ class UploadControllerTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertHeader('content-disposition', 'attachment; filename=report.pdf');
+        $response->assertHeader('content-disposition', 'attachment; filename="upload-1.pdf"');
         $response->assertHeader('x-content-type-options', 'nosniff');
     }
 
@@ -133,6 +133,38 @@ class UploadControllerTest extends TestCase
         $this->assertStringNotContainsString("\r", $response->headers->get('content-disposition') ?: '');
         $this->assertStringNotContainsString("\n", $response->headers->get('content-disposition') ?: '');
         $this->assertFalse($response->headers->has('X-Injected'));
+    }
+
+    public function test_it_can_use_the_original_filename_when_explicitly_enabled(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.downloads.use_original_name', true);
+
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/original-name.pdf',
+            'original_name' => 'Quarterly Report.pdf',
+            'mime_type' => 'application/pdf',
+            'extension' => 'pdf',
+            'size' => 24,
+        ]);
+
+        Storage::disk('local')->put($upload->path, 'fake-pdf');
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('o', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', [
+            'token' => $link->token,
+            'download' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertHeader('content-disposition', 'attachment; filename="Quarterly Report.pdf"');
     }
 
     public function test_it_rejects_expired_links(): void

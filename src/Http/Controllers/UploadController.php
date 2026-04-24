@@ -7,12 +7,11 @@ use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UploadController extends Controller
 {
-    public function show(Request $request, string $token): StreamedResponse|BinaryFileResponse
+    public function show(Request $request, string $token): StreamedResponse
     {
         $link = UploadLink::query()
             ->with('upload')
@@ -28,28 +27,30 @@ class UploadController extends Controller
         ])->save();
 
         $upload = $link->upload;
-        abort_if(! app(LaravelUploadsManager::class)->isSafeStoragePath($upload->path), 404);
+        $manager = app(LaravelUploadsManager::class);
+        abort_if(! $manager->isSafeUpload($upload), 404);
 
         $disk = Storage::disk($upload->disk);
-        $downloadName = $this->safeDownloadName($upload->original_name);
+        abort_if(! $disk->exists($upload->path), 404);
+
+        $downloadName = $this->safeDownloadName($this->downloadNameForUpload($upload));
         $headers = $this->securityHeaders();
         $download = $request->boolean('download');
         $previewable = $this->isPreviewable($upload->mime_type);
 
         if ($download || ! $previewable) {
-            return $disk->download($upload->path, $downloadName, $headers);
+            return $this->streamDownload($disk, $upload->path, $downloadName, $headers, 'attachment', $upload->mime_type);
         }
 
-        if ($upload->visibility === 'public') {
-            return $disk->response($upload->path, $downloadName, $headers);
-        }
-
-        return $disk->response(
+        return $this->streamDownload(
+            $disk,
             $upload->path,
             $downloadName,
             $headers + [
                 'Content-Disposition' => 'inline; filename="'.$downloadName.'"',
-            ]
+            ],
+            'inline',
+            $upload->mime_type
         );
     }
 
@@ -86,5 +87,40 @@ class UploadController extends Controller
         $name = trim($name);
 
         return $name !== '' ? $name : 'download';
+    }
+
+    protected function downloadNameForUpload($upload): string
+    {
+        if ((bool) config('laravel-uploads.downloads.use_original_name', false)) {
+            return (string) $upload->original_name;
+        }
+
+        $extension = trim((string) $upload->extension);
+
+        return $extension !== ''
+            ? "upload-{$upload->id}.{$extension}"
+            : "upload-{$upload->id}";
+    }
+
+    protected function streamDownload($disk, string $path, string $downloadName, array $headers, string $disposition, ?string $mimeType): StreamedResponse
+    {
+        $headers['Content-Type'] ??= $mimeType ?: ($disk->mimeType($path) ?: 'application/octet-stream');
+        $headers['Content-Disposition'] ??= $disposition.'; filename="'.$downloadName.'"';
+
+        return response()->stream(function () use ($disk, $path): void {
+            $stream = $disk->readStream($path);
+
+            if (! is_resource($stream)) {
+                echo $disk->get($path);
+
+                return;
+            }
+
+            while (! feof($stream)) {
+                echo fread($stream, 8192);
+            }
+
+            fclose($stream);
+        }, 200, $headers);
     }
 }

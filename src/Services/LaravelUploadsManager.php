@@ -6,6 +6,7 @@ use GhostCompiler\LaravelUploads\Contracts\ResolvesUploadUrls;
 use GhostCompiler\LaravelUploads\Exceptions\LaravelUploadsException;
 use GhostCompiler\LaravelUploads\Models\Upload;
 use GhostCompiler\LaravelUploads\Models\UploadLink;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -18,11 +19,11 @@ class LaravelUploadsManager implements ResolvesUploadUrls
     public function upload(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): Upload
     {
         [$path, $file, $options] = $this->parseUploadArguments($pathOrFile, $file, $options);
+        $visibility = $this->resolveUploadVisibility($options);
         $this->validateUploadedFile($file, $options);
-        $visibility = $this->defaultVisibility();
         $disk = $this->disk();
         $directory = $this->directoryFor($path);
-        $prepared = $this->prepareFileForStorage($file);
+        $prepared = $this->prepareFileForStorage($file, $options);
         $path = "{$directory}/{$prepared['name']}";
         $stream = fopen($prepared['real_path'], 'rb');
 
@@ -30,14 +31,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             throw new RuntimeException('Unable to read the prepared upload file.');
         }
 
-        Storage::disk($disk)->put($path, $stream);
+        try {
+            $this->storePreparedFile($disk, $path, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
 
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-
-        if (($prepared['temporary'] ?? false) && is_file($prepared['real_path'])) {
-            @unlink($prepared['real_path']);
+            if (($prepared['temporary'] ?? false) && is_file($prepared['real_path'])) {
+                @unlink($prepared['real_path']);
+            }
         }
 
         return Upload::query()->create([
@@ -67,12 +70,15 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             }
         }
 
-        return array_map(
-            fn (UploadedFile $file): Upload => $path === null
+        $uploads = [];
+
+        foreach ($files as $file) {
+            $uploads[] = $path === null
                 ? $this->upload($file, $options)
-                : $this->upload($path, $file, $options),
-            $files
-        );
+                : $this->upload($path, $file, $options);
+        }
+
+        return $uploads;
     }
 
     public function url(?Upload $upload, ?int $expiry = null): ?string
@@ -107,7 +113,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
         $disk = Storage::disk($upload->disk);
 
-        if (! $this->isSafeStoragePath($upload->path)) {
+        if (! $this->isSafeUpload($upload, $disk)) {
             return false;
         }
 
@@ -204,7 +210,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
     {
         $this->validateUploadSize($file);
         $this->validateUploadType($file, $options);
-        $this->validateImageDimensions($file);
+        $this->validateImageDimensions($file, $options);
     }
 
     protected function validateUploadSize(UploadedFile $file): void
@@ -224,7 +230,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function validateUploadType(UploadedFile $file, array $options = []): void
     {
-        $mimeType = strtolower((string) ($file->getMimeType() ?: $file->getClientMimeType()));
+        $mimeType = $this->detectMimeType($file);
         $extension = strtolower((string) $file->getClientOriginalExtension());
         $allowedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.allowed_mime_types', $options['allowed_mime_types'] ?? null);
         $allowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.allowed_extensions', $options['allowed_extensions'] ?? null);
@@ -253,11 +259,18 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         if (! $allowsExcludedExtension && $allowedExtensions !== [] && ($extension === '' || ! in_array($extension, $allowedExtensions, true))) {
             throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are not allowed.");
         }
+
+        if ($this->resolveUploadVariant($options) === 'favicon' && ! $this->isSupportedFaviconSource($file, $mimeType, $extension)) {
+            throw new LaravelUploadsException('LaravelUploads: Favicon uploads must be ICO, PNG, JPEG, or WEBP images.');
+        }
     }
 
-    protected function validateImageDimensions(UploadedFile $file): void
+    protected function validateImageDimensions(UploadedFile $file, array $options = []): void
     {
-        if (! $this->shouldCompressImages() || ! $this->isCompressibleImage($file)) {
+        if (
+            ! $this->isCompressibleImage($file)
+            || (! $this->shouldCompressImages() && $this->resolveUploadVariant($options) !== 'favicon')
+        ) {
             return;
         }
 
@@ -329,9 +342,38 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function defaultVisibility(): string
     {
-        $visibility = strtolower(trim((string) config('laravel-uploads.defaults.type', 'private')));
+        $visibility = strtolower(trim((string) config(
+            'laravel-uploads.defaults.visibility',
+            config('laravel-uploads.defaults.type', 'private')
+        )));
 
         return in_array($visibility, ['public', 'private'], true) ? $visibility : 'private';
+    }
+
+    protected function resolveUploadVisibility(array $options): string
+    {
+        $visibility = strtolower(trim((string) ($options['visibility'] ?? '')));
+
+        if ($visibility === '' && isset($options['type']) && in_array(strtolower(trim((string) $options['type'])), ['public', 'private'], true)) {
+            $visibility = strtolower(trim((string) $options['type']));
+        }
+
+        return in_array($visibility, ['public', 'private'], true) ? $visibility : $this->defaultVisibility();
+    }
+
+    protected function resolveUploadVariant(array $options): ?string
+    {
+        $variant = strtolower(trim((string) ($options['variant'] ?? $options['format'] ?? '')));
+
+        if ($variant === '' && isset($options['type'])) {
+            $type = strtolower(trim((string) $options['type']));
+
+            if (in_array($type, ['favicon', 'favicaon'], true)) {
+                $variant = 'favicon';
+            }
+        }
+
+        return $variant !== '' ? $variant : null;
     }
 
     protected function disk(): string
@@ -387,6 +429,14 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $path === $basePath || str_starts_with($path, "{$basePath}/");
     }
 
+    public function isSafeUpload(Upload $upload, ?FilesystemAdapter $disk = null): bool
+    {
+        $disk ??= Storage::disk($upload->disk);
+
+        return $this->isSafeStoragePath($upload->path)
+            && $this->isContainedWithinBaseDirectory($disk, $upload->path);
+    }
+
     protected function generateFilename(UploadedFile $file): string
     {
         $basename = Str::uuid()->toString();
@@ -395,8 +445,25 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $extension ? "{$basename}.{$extension}" : $basename;
     }
 
-    protected function prepareFileForStorage(UploadedFile $file): array
+    protected function storePreparedFile(string $disk, string $path, mixed $stream): void
     {
+        if (! is_resource($stream)) {
+            throw new RuntimeException('Unable to read the prepared upload file.');
+        }
+
+        $stored = Storage::disk($disk)->put($path, $stream);
+
+        if ($stored === false) {
+            throw new RuntimeException('Unable to store the prepared upload file.');
+        }
+    }
+
+    protected function prepareFileForStorage(UploadedFile $file, array $options = []): array
+    {
+        if ($this->resolveUploadVariant($options) === 'favicon') {
+            return $this->prepareFaviconForStorage($file);
+        }
+
         if (! $this->shouldCompressImages() || ! $this->isCompressibleImage($file)) {
             return $this->prepareOriginalFileForStorage($file);
         }
@@ -453,7 +520,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             'name' => $this->generateFilename($file),
             'download_name' => $file->getClientOriginalName(),
             'real_path' => $realPath,
-            'mime_type' => $file->getClientMimeType(),
+            'mime_type' => $this->detectMimeType($file) ?: 'application/octet-stream',
             'extension' => $file->getClientOriginalExtension(),
             'size' => $size,
             'temporary' => false,
@@ -481,7 +548,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function isCompressibleImage(UploadedFile $file): bool
     {
-        $mimeType = $file->getMimeType() ?: $file->getClientMimeType();
+        $mimeType = $this->detectMimeType($file);
 
         return in_array($mimeType, [
             'image/jpeg',
@@ -597,19 +664,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        $avifPath = $temporaryFile.'.avif';
-        @unlink($temporaryFile);
-
         imagepalettetotruecolor($source);
         imagealphablending($source, true);
         imagesavealpha($source, true);
 
-        $saved = imageavif($source, $avifPath, $this->compressionQuality());
+        $saved = imageavif($source, $temporaryFile, $this->compressionQuality());
 
         imagedestroy($source);
 
-        if (! $saved || ! is_file($avifPath)) {
-            @unlink($avifPath);
+        if (! $saved || ! is_file($temporaryFile)) {
+            @unlink($temporaryFile);
 
             $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image.';
             Log::error($message);
@@ -618,7 +682,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return [
-            'path' => $avifPath,
+            'path' => $temporaryFile,
             'mime_type' => 'image/avif',
             'extension' => 'avif',
             'compression' => [
@@ -652,20 +716,17 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        $avifPath = $temporaryFile.'.avif';
-        @unlink($temporaryFile);
-
         try {
             $imagick = new \Imagick();
             $imagick->readImage($file->getRealPath());
             $dimensions = $this->resizeImagickImage($imagick);
             $imagick->setImageFormat('AVIF');
             $imagick->setImageCompressionQuality($this->compressionQuality());
-            $imagick->writeImage($avifPath);
+            $imagick->writeImage($temporaryFile);
             $imagick->clear();
             $imagick->destroy();
         } catch (\Throwable $exception) {
-            @unlink($avifPath);
+            @unlink($temporaryFile);
 
             $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
             Log::error($message);
@@ -673,7 +734,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        if (! is_file($avifPath)) {
+        if (! is_file($temporaryFile)) {
             $message = 'LaravelUploads: AVIF conversion failed while encoding the uploaded image with Imagick.';
             Log::error($message);
 
@@ -681,7 +742,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return [
-            'path' => $avifPath,
+            'path' => $temporaryFile,
             'mime_type' => 'image/avif',
             'extension' => 'avif',
             'compression' => [
@@ -739,19 +800,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        $webpPath = $temporaryFile.'.webp';
-        @unlink($temporaryFile);
-
         imagepalettetotruecolor($source);
         imagealphablending($source, true);
         imagesavealpha($source, true);
 
-        $saved = imagewebp($source, $webpPath, $this->compressionQuality());
+        $saved = imagewebp($source, $temporaryFile, $this->compressionQuality());
 
         imagedestroy($source);
 
-        if (! $saved || ! is_file($webpPath)) {
-            @unlink($webpPath);
+        if (! $saved || ! is_file($temporaryFile)) {
+            @unlink($temporaryFile);
 
             $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image.';
             Log::error($message);
@@ -760,7 +818,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return [
-            'path' => $webpPath,
+            'path' => $temporaryFile,
             'mime_type' => 'image/webp',
             'extension' => 'webp',
             'compression' => [
@@ -794,20 +852,17 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        $webpPath = $temporaryFile.'.webp';
-        @unlink($temporaryFile);
-
         try {
             $imagick = new \Imagick();
             $imagick->readImage($file->getRealPath());
             $dimensions = $this->resizeImagickImage($imagick);
             $imagick->setImageFormat('WEBP');
             $imagick->setImageCompressionQuality($this->compressionQuality());
-            $imagick->writeImage($webpPath);
+            $imagick->writeImage($temporaryFile);
             $imagick->clear();
             $imagick->destroy();
         } catch (\Throwable $exception) {
-            @unlink($webpPath);
+            @unlink($temporaryFile);
 
             $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image with Imagick. '.$exception->getMessage();
             Log::error($message);
@@ -815,7 +870,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return null;
         }
 
-        if (! is_file($webpPath)) {
+        if (! is_file($temporaryFile)) {
             $message = 'LaravelUploads: WEBP conversion failed while encoding the uploaded image with Imagick.';
             Log::error($message);
 
@@ -823,7 +878,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return [
-            'path' => $webpPath,
+            'path' => $temporaryFile,
             'mime_type' => 'image/webp',
             'extension' => 'webp',
             'compression' => [
@@ -840,7 +895,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function createImageResource(UploadedFile $file): mixed
     {
-        $mimeType = $file->getMimeType() ?: $file->getClientMimeType();
+        $mimeType = $this->detectMimeType($file);
         $path = $file->getRealPath();
 
         return match ($mimeType) {
@@ -853,7 +908,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function imageResourceFailureMessage(UploadedFile $file): string
     {
-        $mimeType = $file->getMimeType() ?: $file->getClientMimeType();
+        $mimeType = $this->detectMimeType($file);
 
         return match ($mimeType) {
             'image/jpeg' => function_exists('imagecreatefromjpeg')
@@ -1046,7 +1101,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         $availableMemory = $memoryLimit - memory_get_usage(true);
-        $requiredMemory = $width * $height * 5;
+        $requiredMemory = $width * $height * 8;
 
         return $availableMemory > 0 && $requiredMemory < ($availableMemory * 0.8);
     }
@@ -1082,6 +1137,187 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         $value = (int) config('laravel-uploads.image_optimization.max_height');
 
         return $value > 0 ? $value : null;
+    }
+
+    protected function detectMimeType(UploadedFile $file): ?string
+    {
+        $mimeType = strtolower(trim((string) $file->getMimeType()));
+
+        return $mimeType !== '' ? $mimeType : null;
+    }
+
+    protected function isSupportedFaviconSource(UploadedFile $file, ?string $mimeType = null, ?string $extension = null): bool
+    {
+        $mimeType ??= $this->detectMimeType($file);
+        $extension ??= strtolower((string) $file->getClientOriginalExtension());
+
+        return in_array($mimeType, [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/x-icon',
+            'image/vnd.microsoft.icon',
+        ], true) || in_array($extension, ['ico'], true);
+    }
+
+    protected function prepareFaviconForStorage(UploadedFile $file): array
+    {
+        if ($this->isExistingFaviconFile($file)) {
+            return $this->prepareOriginalFileForStorage($file, [
+                'enabled' => false,
+                'applied' => false,
+                'variant' => 'favicon',
+                'favicon_source' => 'original',
+            ]);
+        }
+
+        $source = $this->createImageResource($file);
+
+        if (! $source) {
+            throw new LaravelUploadsException('LaravelUploads: Unable to convert the uploaded image into a favicon.');
+        }
+
+        $size = max(16, (int) config('laravel-uploads.favicon.size', 64));
+
+        if (! $this->canAllocateImagePixels($size, $size)) {
+            imagedestroy($source);
+
+            throw new LaravelUploadsException('LaravelUploads: Unable to allocate enough memory for favicon conversion.');
+        }
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $scale = min($size / max(1, $sourceWidth), $size / max(1, $sourceHeight), 1);
+        $targetWidth = max(1, (int) round($sourceWidth * $scale));
+        $targetHeight = max(1, (int) round($sourceHeight * $scale));
+        $targetX = (int) floor(($size - $targetWidth) / 2);
+        $targetY = (int) floor(($size - $targetHeight) / 2);
+        $canvas = imagecreatetruecolor($size, $size);
+
+        if ($canvas === false) {
+            imagedestroy($source);
+
+            throw new LaravelUploadsException('LaravelUploads: Unable to allocate a favicon canvas.');
+        }
+
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefill($canvas, 0, 0, $transparent);
+
+        imagecopyresampled(
+            $canvas,
+            $source,
+            $targetX,
+            $targetY,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $sourceWidth,
+            $sourceHeight
+        );
+
+        imagedestroy($source);
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'laravel-uploads-favicon-');
+
+        if ($temporaryFile === false) {
+            imagedestroy($canvas);
+
+            throw new LaravelUploadsException('LaravelUploads: Unable to create a temporary file for favicon conversion.');
+        }
+
+        $saved = imagepng($canvas, $temporaryFile, 9);
+
+        imagedestroy($canvas);
+
+        if (! $saved || ! is_file($temporaryFile)) {
+            @unlink($temporaryFile);
+
+            throw new LaravelUploadsException('LaravelUploads: Favicon conversion failed while encoding the uploaded image.');
+        }
+
+        $downloadBaseName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+
+        return [
+            'name' => Str::uuid()->toString().'.png',
+            'download_name' => ($downloadBaseName !== '' ? $downloadBaseName : 'favicon').'.png',
+            'real_path' => $temporaryFile,
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => filesize($temporaryFile) ?: $file->getSize(),
+            'temporary' => true,
+            'compression' => [
+                'enabled' => true,
+                'applied' => true,
+                'variant' => 'favicon',
+                'driver' => 'gd',
+                'width' => $size,
+                'height' => $size,
+            ],
+        ];
+    }
+
+    protected function isExistingFaviconFile(UploadedFile $file): bool
+    {
+        $mimeType = $this->detectMimeType($file);
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+
+        return in_array($mimeType, ['image/x-icon', 'image/vnd.microsoft.icon'], true)
+            || $extension === 'ico';
+    }
+
+    protected function isContainedWithinBaseDirectory(FilesystemAdapter $disk, string $path): bool
+    {
+        if (! method_exists($disk, 'path')) {
+            return true;
+        }
+
+        try {
+            $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
+            $absoluteBasePath = $this->canonicalizeAbsolutePath($disk->path($basePath));
+            $absoluteTargetPath = $this->canonicalizeAbsolutePath($disk->path($path));
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $absoluteTargetPath === $absoluteBasePath
+            || str_starts_with($absoluteTargetPath, $absoluteBasePath.'/');
+    }
+
+    protected function canonicalizeAbsolutePath(string $path): string
+    {
+        $normalized = str_replace('\\', '/', trim($path));
+        $prefix = '';
+
+        if (preg_match('/^[A-Za-z]:\//', $normalized) === 1) {
+            $prefix = substr($normalized, 0, 2);
+            $normalized = substr($normalized, 2);
+        }
+
+        if (str_starts_with($normalized, '/')) {
+            $normalized = ltrim($normalized, '/');
+            $prefix .= '/';
+        }
+
+        $segments = [];
+
+        foreach (explode('/', $normalized) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                array_pop($segments);
+
+                continue;
+            }
+
+            $segments[] = $segment;
+        }
+
+        return rtrim($prefix.implode('/', $segments), '/') ?: '/';
     }
 
     protected function avifSupportMessage(): string

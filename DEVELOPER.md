@@ -59,6 +59,134 @@ composer update ghostcompiler/laravel-uploads
 php artisan optimize:clear
 ```
 
+## Local Development
+
+### Use this package inside a local Laravel app
+
+1. Add a Composer path repository in the Laravel app.
+2. Require `ghostcompiler/laravel-uploads`.
+3. Run:
+
+```bash
+composer update ghostcompiler/laravel-uploads
+php artisan package:discover
+php artisan ghost:laravel-uploads
+php artisan migrate
+```
+
+### Pull latest package changes into the Laravel app
+
+When you make changes in this package repo and want your Laravel app to use them:
+
+```bash
+composer update ghostcompiler/laravel-uploads
+php artisan package:discover
+```
+
+If you changed helper autoloading or package metadata, this is also useful:
+
+```bash
+composer dump-autoload
+```
+
+If you changed the published config or migration stubs:
+
+```bash
+php artisan ghost:laravel-uploads
+```
+
+Overwrite existing published files without prompts:
+
+```bash
+php artisan ghost:laravel-uploads --force
+```
+
+### Recommended pull / push workflow
+
+Inside the package repo:
+
+```bash
+git pull
+```
+
+Make your changes, then:
+
+```bash
+git add .
+git commit -m "Update Laravel Uploads"
+git push
+```
+
+Inside the Laravel app using the local path repository:
+
+```bash
+composer update ghostcompiler/laravel-uploads
+php artisan package:discover
+```
+
+## Testing
+
+This package includes a PHPUnit + Testbench scaffold.
+
+### Install dev dependencies
+
+Inside the package repo:
+
+```bash
+composer install
+```
+
+### Run tests
+
+```bash
+composer test
+```
+
+### Current test coverage
+
+- cached URL reuse until expiry
+- cache invalidation when uploads are deleted
+- cache-disabled fallback behavior
+- resize dimension calculation
+- aspect-ratio preservation
+- no upscaling behavior
+- expired link cleanup command
+- dry-run cleanup reporting
+
+### Suggested manual testing in a Laravel app
+
+Use a real Laravel test project and verify:
+
+- upload works with `Uploads::upload(...)`
+- upload works with `GhostCompiler()->upload(...)`
+- custom folder uploads work
+- excluded file validation blocks dangerous extensions
+- explicit excluded-extension upload override works only when requested
+- model serialization returns URL fields correctly
+- cached URL reuse prevents repeated link generation on refresh
+- preview URL opens supported file types
+- SVG files download instead of opening inline by default
+- `?download=1` forces download
+- AVIF conversion works when supported
+- WEBP fallback works when AVIF is unavailable
+- resize limits preserve the original aspect ratio
+- oversized image dimensions are rejected before optimization
+- cleanup command removes only expired links
+
+## Notes
+
+- `Uploads::upload($file)` stores files in the configured `base_path`
+- `Uploads::upload('demo/image', $file)` stores files inside `base_path/demo/image`
+- `GhostCompiler()->upload($file)` uses the same Laravel Uploads service directly
+- upload paths must stay relative and cannot contain traversal segments
+- generated URLs are tracked in the database
+- generated URLs are cached by upload ID and expiry when `cache.enabled` is `true`
+- image optimization only applies to supported images
+- AVIF is tried first
+- WEBP is used as the main fallback format
+- resizing keeps the original aspect ratio
+- GD is used first and `Imagick` is used as a fallback encoder when available
+
 ## Upload Validation
 
 Package validation is controlled by `config/laravel-uploads.php`.
@@ -157,8 +285,8 @@ Image optimization can reject oversized source images before GD or Imagick proce
     'max_height' => null,
     'max_input_width' => 8000,
     'max_input_height' => 8000,
-    'max_input_pixels' => 20000000,
-    'max_output_pixels' => 8000000,
+    'max_input_pixels' => 12000000,
+    'max_output_pixels' => 4000000,
 ],
 ```
 
