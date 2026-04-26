@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class InstallCommand extends Command
 {
-    protected $signature = 'ghost:laravel-uploads {--force : Overwrite existing Laravel Uploads files}';
+    protected $signature = 'install:laravel-uploads {--force : Overwrite existing Laravel Uploads files}';
 
     protected $description = 'Publish the Laravel Uploads config and migration files';
 

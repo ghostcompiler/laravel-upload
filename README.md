@@ -16,14 +16,14 @@ Laravel Uploads stores files through Laravel Storage, tracks upload metadata, ge
 
 ```bash
 composer require ghostcompiler/laravel-uploads
-php artisan ghost:laravel-uploads
+php artisan install:laravel-uploads
 php artisan migrate
 ```
 
 Use `--force` to overwrite already-published config or migration files:
 
 ```bash
-php artisan ghost:laravel-uploads --force
+php artisan install:laravel-uploads --force
 ```
 
 By default, files are stored under `LaravelUploads` on the configured disk.

@@ -63,7 +63,7 @@ php artisan optimize:clear
 ```bash
 composer update ghostcompiler/laravel-uploads
 php artisan package:discover
-php artisan ghost:laravel-uploads
+php artisan install:laravel-uploads
 php artisan migrate
 ```
 
@@ -85,13 +85,13 @@ composer dump-autoload
 If you changed the published config or migration stubs:
 
 ```bash
-php artisan ghost:laravel-uploads
+php artisan install:laravel-uploads
 ```
 
 Overwrite existing published files without prompts:
 
 ```bash
-php artisan ghost:laravel-uploads --force
+php artisan install:laravel-uploads --force
 ```
 
 ### Recommended pull / push workflow

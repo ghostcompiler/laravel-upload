@@ -8,7 +8,7 @@ class InstallCommandTest extends TestCase
 {
     public function test_it_publishes_config_and_migration_stubs(): void
     {
-        $this->artisan('ghost:laravel-uploads --force')
+        $this->artisan('install:laravel-uploads --force')
             ->expectsOutputToContain('Published config/laravel-uploads.php')
             ->expectsOutputToContain('Published create_laravel_uploads_tables.php')
             ->expectsOutputToContain('Laravel Uploads assets published successfully.')
