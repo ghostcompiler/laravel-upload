@@ -20,13 +20,6 @@ This package was developed using **ServBay** as the local development environmen
 - Tested on: `Mac M4`
 - Built on: `Mac M4`
 
-
-### Testing And Build Machine
-
-- Tested on: `Mac M4`
-- Built on: `Mac M4`
-
-
 This guide covers package-level configuration, validation, and security-sensitive upload behavior.
 
 ## Local Path Repository Installs
@@ -307,7 +300,7 @@ This applies to upload paths, read paths, and delete paths.
 
 ## Preview Safety
 
-SVG is not included in the default `preview_mime_types` list because inline SVG can execute script in the application origin. SVG files will download by default unless the application explicitly opts into previewing them.
+SVG is not included in the default `preview_mime_types` list because inline SVG can execute script in the application origin. The package controller also blocks inline SVG preview even if `image/svg+xml` is added to the preview list, so SVG files download by default.
 
 ```php
 'preview_mime_types' => [
@@ -320,3 +313,13 @@ SVG is not included in the default `preview_mime_types` list because inline SVG 
     'text/plain',
 ],
 ```
+
+## Operational Security Checklist
+
+- Keep `validation.max_size` strict for the application.
+- Use conservative image pixel limits when optimization is enabled.
+- Enable `image_optimization.strict` when storing original images after conversion failure is not acceptable.
+- Use Laravel throttling, queue worker limits, web server upload limits, or a WAF for high-volume upload endpoints.
+- Schedule `php artisan ghost:laravel-uploads-clean` to remove expired private URL tokens.
+- Use `expose => true` only for upload fields that are safe to return in API responses.
+- Use `Uploads::resolvePublicUrlsUsing(...)` or `urls.public_resolver` for multi-tenant public upload URLs.
