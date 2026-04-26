@@ -16,6 +16,8 @@ use RuntimeException;
 
 class LaravelUploadsManager implements ResolvesUploadUrls
 {
+    protected mixed $publicUrlResolver = null;
+
     public function upload(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): Upload
     {
         [$path, $file, $options] = $this->parseUploadArguments($pathOrFile, $file, $options);
@@ -32,7 +34,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         try {
-            $this->storePreparedFile($disk, $path, $stream);
+            $this->storePreparedFile($disk, $path, $stream, $visibility);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -88,6 +90,13 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return $this->resolveUrlForUploadId((int) $upload->getKey(), $expiry, $upload);
+    }
+
+    public function resolvePublicUrlsUsing(?callable $resolver): static
+    {
+        $this->publicUrlResolver = $resolver;
+
+        return $this;
     }
 
     public function find(int|string|null $id): ?Upload
@@ -363,12 +372,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function resolveUploadVariant(array $options): ?string
     {
+        if ((bool) ($options['favicon'] ?? false)) {
+            return 'favicon';
+        }
+
         $variant = strtolower(trim((string) ($options['variant'] ?? $options['format'] ?? '')));
 
         if ($variant === '' && isset($options['type'])) {
             $type = strtolower(trim((string) $options['type']));
 
-            if (in_array($type, ['favicon', 'favicaon'], true)) {
+            if ($type === 'favicon') {
                 $variant = 'favicon';
             }
         }
@@ -445,13 +458,13 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $extension ? "{$basename}.{$extension}" : $basename;
     }
 
-    protected function storePreparedFile(string $disk, string $path, mixed $stream): void
+    protected function storePreparedFile(string $disk, string $path, mixed $stream, string $visibility = 'private'): void
     {
         if (! is_resource($stream)) {
             throw new RuntimeException('Unable to read the prepared upload file.');
         }
 
-        $stored = Storage::disk($disk)->put($path, $stream);
+        $stored = Storage::disk($disk)->put($path, $stream, $visibility);
 
         if ($stored === false) {
             throw new RuntimeException('Unable to store the prepared upload file.');
@@ -1356,6 +1369,16 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     protected function resolveUrlForUploadId(int $uploadId, ?int $expiry = null, ?Upload $upload = null): ?string
     {
+        $upload ??= $this->find($uploadId);
+
+        if (! $upload) {
+            return null;
+        }
+
+        if ($upload->visibility === 'public') {
+            return $this->publicUrlForUpload($upload);
+        }
+
         $minutes = $this->resolveLinkExpiryMinutes($expiry);
         $cacheEnabled = $this->shouldCacheGeneratedUrls() && $minutes > 0;
         $cacheKey = $this->uploadUrlCacheKey($uploadId, $minutes);
@@ -1368,12 +1391,6 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             }
         }
 
-        $upload ??= $this->find($uploadId);
-
-        if (! $upload) {
-            return null;
-        }
-
         $link = $this->createLink($upload, $minutes);
         $url = $link->url();
 
@@ -1383,6 +1400,60 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return $url;
+    }
+
+    protected function publicUrlForUpload(Upload $upload): ?string
+    {
+        $disk = Storage::disk($upload->disk);
+
+        if (! $this->isSafeUpload($upload, $disk)) {
+            return null;
+        }
+
+        $resolvedUrl = $this->resolvePublicUrlWithCustomResolver($upload, $disk);
+
+        if ($resolvedUrl !== null) {
+            return $resolvedUrl;
+        }
+
+        try {
+            return $disk->url($upload->path);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    protected function resolvePublicUrlWithCustomResolver(Upload $upload, FilesystemAdapter $disk): ?string
+    {
+        $resolver = $this->publicUrlResolver ?? config('laravel-uploads.urls.public_resolver');
+
+        if (! $resolver) {
+            return null;
+        }
+
+        if (is_string($resolver) && class_exists($resolver)) {
+            $resolver = app($resolver);
+        }
+
+        if (is_object($resolver) && method_exists($resolver, 'publicUrl')) {
+            $resolver = [$resolver, 'publicUrl'];
+        }
+
+        if (! is_callable($resolver)) {
+            return null;
+        }
+
+        try {
+            $url = $resolver($upload, $disk, $upload->path);
+        } catch (\Throwable $exception) {
+            Log::warning('LaravelUploads: Public URL resolver failed. '.$exception->getMessage());
+
+            return null;
+        }
+
+        $url = is_string($url) ? trim($url) : '';
+
+        return $url !== '' ? $url : null;
     }
 
     protected function createLink(Upload $upload, ?int $expiry = null): UploadLink

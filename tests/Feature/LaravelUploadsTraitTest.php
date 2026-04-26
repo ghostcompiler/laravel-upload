@@ -119,6 +119,29 @@ class LaravelUploadsTraitTest extends TestCase
         Storage::disk('local')->assertMissing($upload->path);
         $this->assertDatabaseMissing('laravel_uploads_uploads', ['id' => $upload->id]);
     }
+
+    public function test_it_allows_models_to_customize_uploadable_values(): void
+    {
+        $upload = Upload::query()->create([
+            'disk' => 'local',
+            'visibility' => 'private',
+            'path' => 'LaravelUploads/avatar-custom.png',
+            'original_name' => 'avatar-custom.png',
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => 123,
+        ]);
+
+        $user = CustomValueTestUser::query()->create([
+            'avatar_id' => $upload->id,
+        ]);
+
+        $this->assertSame([
+            'url' => $user->avatar['url'],
+            'exists' => true,
+        ], $user->avatar);
+        $this->assertStringContainsString('/_laravel-uploads/file/', $user->avatar['url']);
+    }
 }
 
 class TestUser extends Model
@@ -156,4 +179,31 @@ class SecureTestUser extends Model
             'expiry' => 60,
         ],
     ];
+}
+
+class CustomValueTestUser extends Model
+{
+    use LaravelUploads;
+
+    protected $table = 'test_users';
+
+    protected $guarded = [];
+
+    protected $uploadable = [
+        'avatar_id' => [
+            'name' => 'avatar',
+            'visibility' => 'private',
+            'id' => 'hide',
+            'expiry' => 60,
+            'expose' => true,
+        ],
+    ];
+
+    public function setUploadableValue($value): array
+    {
+        return [
+            'url' => $value,
+            'exists' => $value !== null,
+        ];
+    }
 }

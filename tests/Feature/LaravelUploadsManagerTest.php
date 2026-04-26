@@ -90,6 +90,80 @@ class LaravelUploadsManagerTest extends TestCase
         $this->assertSame(2, UploadLink::query()->count());
     }
 
+    public function test_public_upload_urls_use_the_disk_url_without_generating_links(): void
+    {
+        Storage::fake('local');
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->image('public-avatar.png', 120, 120),
+            [
+                'visibility' => 'public',
+            ]
+        );
+
+        $firstUrl = app(LaravelUploadsManager::class)->url($upload, 15);
+        $secondUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+
+        $this->assertSame('public', $upload->visibility);
+        $this->assertSame($firstUrl, $secondUrl);
+        $this->assertStringContainsString($upload->path, $firstUrl);
+        $this->assertSame(0, UploadLink::query()->count());
+    }
+
+    public function test_public_upload_urls_can_use_a_runtime_resolver_for_tenant_domains(): void
+    {
+        Storage::fake('local');
+
+        $manager = app(LaravelUploadsManager::class);
+        $manager->resolvePublicUrlsUsing(
+            fn (Upload $upload, $disk, string $path): string => 'https://tenant-one.test/assets/'.$path
+        );
+
+        $upload = $manager->upload(
+            'avatars',
+            UploadedFile::fake()->image('tenant-avatar.png', 120, 120),
+            [
+                'visibility' => 'public',
+            ]
+        );
+
+        $this->assertSame('https://tenant-one.test/assets/'.$upload->path, $manager->url($upload));
+        $this->assertSame(0, UploadLink::query()->count());
+    }
+
+    public function test_public_upload_urls_can_use_a_configured_resolver_class(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.urls.public_resolver', TenantPublicUrlResolver::class);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            'avatars',
+            UploadedFile::fake()->image('tenant-avatar.png', 120, 120),
+            [
+                'visibility' => 'public',
+            ]
+        );
+
+        $url = app(LaravelUploadsManager::class)->url($upload);
+
+        $this->assertSame('https://configured-tenant.test/storage/'.$upload->path, $url);
+        $this->assertSame(0, UploadLink::query()->count());
+    }
+
+    public function test_public_uploads_are_stored_with_public_visibility(): void
+    {
+        Storage::fake('local');
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->image('public-file.png', 120, 120),
+            [
+                'visibility' => 'public',
+            ]
+        );
+
+        $this->assertSame('public', Storage::disk('local')->getVisibility($upload->path));
+    }
+
     public function test_it_clears_cached_urls_when_an_upload_is_removed(): void
     {
         Storage::fake('local');
@@ -246,19 +320,19 @@ class LaravelUploadsManagerTest extends TestCase
         }
     }
 
-    public function test_upload_to_field_applies_visibility_and_favicon_processing(): void
+    public function test_upload_accepts_boolean_favicon_option_for_processing(): void
     {
         Storage::fake('local');
 
-        $user = new UploadableUser();
-        $upload = $user->uploadToField(
-            'avatar_id',
+        $upload = app(LaravelUploadsManager::class)->upload(
+            'icons',
             UploadedFile::fake()->image('avatar.png', 120, 60),
-            'icons'
+            [
+                'favicon' => true,
+            ]
         );
 
-        $this->assertSame($upload->id, $user->getRawOriginal('avatar_id'));
-        $this->assertSame('public', $upload->visibility);
+        $this->assertSame('private', $upload->visibility);
         $this->assertSame('png', $upload->extension);
         $this->assertSame('favicon', $upload->metadata['compression']['variant']);
         $this->assertStringStartsWith('LaravelUploads/icons/', $upload->path);
@@ -272,7 +346,7 @@ class LaravelUploadsManagerTest extends TestCase
         $upload = app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->create('favicon.ico', 1, 'image/x-icon'),
             [
-                'variant' => 'favicon',
+                'favicon' => true,
             ]
         );
 
@@ -296,7 +370,7 @@ class LaravelUploadsManagerTest extends TestCase
         app(LaravelUploadsManager::class)->upload(
             UploadedFile::fake()->image('favicon.png', 101, 100),
             [
-                'variant' => 'favicon',
+                'favicon' => true,
             ]
         );
     }
@@ -304,7 +378,7 @@ class LaravelUploadsManagerTest extends TestCase
     public function test_it_does_not_create_upload_records_when_storage_fails(): void
     {
         $manager = new class extends LaravelUploadsManager {
-            protected function storePreparedFile(string $disk, string $path, mixed $stream): void
+            protected function storePreparedFile(string $disk, string $path, mixed $stream, string $visibility = 'private'): void
             {
                 throw new RuntimeException('Unable to store the prepared upload file.');
             }
@@ -423,34 +497,10 @@ class LaravelUploadsManagerTest extends TestCase
     }
 }
 
-class UploadableUser
+class TenantPublicUrlResolver
 {
-    use \GhostCompiler\LaravelUploads\Concerns\LaravelUploads;
-
-    protected array $attributes = [];
-
-    protected array $hidden = [];
-
-    protected $uploadable = [
-        'avatar_id' => [
-            'name' => 'avatar',
-            'visibility' => 'public',
-            'variant' => 'favicon',
-            'id' => 'hide',
-            'expiry' => 60,
-            'expose' => true,
-        ],
-    ];
-
-    public function setAttribute($key, $value)
+    public function publicUrl(Upload $upload, $disk, string $path): string
     {
-        $this->attributes[$key] = $value;
-
-        return $this;
-    }
-
-    public function getRawOriginal($key)
-    {
-        return $this->attributes[$key] ?? null;
+        return 'https://configured-tenant.test/storage/'.$path;
     }
 }

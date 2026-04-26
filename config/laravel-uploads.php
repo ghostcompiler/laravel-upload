@@ -83,6 +83,12 @@ return [
         'use_original_name' => false,
     ],
 
+    'urls' => [
+        // Optional callable or class name for tenant/CDN-aware public upload URLs.
+        // The resolver receives: (Upload $upload, FilesystemAdapter $disk, string $path).
+        'public_resolver' => null,
+    ],
+
     'preview_mime_types' => [
         'image/avif',
         'image/jpeg',

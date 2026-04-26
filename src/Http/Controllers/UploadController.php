@@ -7,6 +7,7 @@ use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UploadController extends Controller
@@ -111,16 +112,16 @@ class UploadController extends Controller
             $stream = $disk->readStream($path);
 
             if (! is_resource($stream)) {
-                echo $disk->get($path);
-
-                return;
+                throw new RuntimeException('Unable to stream the requested upload.');
             }
 
-            while (! feof($stream)) {
-                echo fread($stream, 8192);
+            try {
+                while (! feof($stream)) {
+                    echo fread($stream, 8192);
+                }
+            } finally {
+                fclose($stream);
             }
-
-            fclose($stream);
         }, 200, $headers);
     }
 }

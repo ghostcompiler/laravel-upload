@@ -2,10 +2,8 @@
 
 namespace GhostCompiler\LaravelUploads\Concerns;
 
-use GhostCompiler\LaravelUploads\Exceptions\LaravelUploadsException;
 use GhostCompiler\LaravelUploads\Models\Upload;
 use GhostCompiler\LaravelUploads\Services\LaravelUploadsManager;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -96,7 +94,11 @@ trait LaravelUploads
                 $visibility = $type;
             }
 
-            if (in_array($type, ['favicon', 'favicaon'], true)) {
+            if ($type === 'favicon') {
+                $variant = 'favicon';
+            }
+
+            if ((bool) Arr::get($options, 'favicon', false)) {
                 $variant = 'favicon';
             }
 
@@ -113,23 +115,15 @@ trait LaravelUploads
         return $normalized;
     }
 
-    public function uploadToField(string $column, UploadedFile $file, ?string $path = null, array|string|null $options = null): Upload
+    public function uploadableValue(string $column): mixed
     {
         $config = $this->uploadableFields()[$column] ?? null;
 
         if (! $config) {
-            throw new LaravelUploadsException("LaravelUploads: Unknown uploadable field [{$column}].");
+            return null;
         }
 
-        $options = $this->mergeUploadOptionsForField($config, $options);
-        $manager = app(LaravelUploadsManager::class);
-        $upload = $path === null
-            ? $manager->upload($file, $options)
-            : $manager->upload($path, $file, $options);
-
-        $this->setAttribute($column, $upload->getKey());
-
-        return $upload;
+        return $this->resolveUploadableValue($column, $config);
     }
 
     public function getAttribute($key)
@@ -137,10 +131,7 @@ trait LaravelUploads
         if (is_string($key)) {
             foreach ($this->uploadableFields() as $column => $options) {
                 if ($options['name'] === $key) {
-                    return app(LaravelUploadsManager::class)->urlFromId(
-                        $this->getRawOriginal($column),
-                        $options['expiry']
-                    );
+                    return $this->resolveUploadableValue($column, $options);
                 }
             }
         }
@@ -158,42 +149,38 @@ trait LaravelUploads
             }
 
             if ($options['expose']) {
-                $attributes[$options['name']] = app(LaravelUploadsManager::class)->urlFromId(
-                    $this->getRawOriginal($column),
-                    $options['expiry']
-                );
+                $attributes[$options['name']] = $this->resolveUploadableValue($column, $options);
             }
         }
 
         return $attributes;
     }
 
-    protected function mergeUploadOptionsForField(array $config, array|string|null $options): array
+    protected function resolveUploadableValue(string $column, array $options): mixed
     {
-        $fieldOptions = [
-            'visibility' => $config['visibility'],
-        ];
+        $value = app(LaravelUploadsManager::class)->urlFromId(
+            $this->getRawOriginal($column),
+            $options['expiry']
+        );
 
-        if (! empty($config['variant'])) {
-            $fieldOptions['variant'] = $config['variant'];
+        $fieldMethod = 'set'.Str::studly($options['name']).'UploadableValue';
+
+        if (method_exists($this, $fieldMethod)) {
+            return $this->callUploadableValueHook($fieldMethod, $value, $column, $options);
         }
 
-        if ($options === null) {
-            return $fieldOptions;
+        if (method_exists($this, 'setUploadableValue')) {
+            return $this->callUploadableValueHook('setUploadableValue', $value, $column, $options);
         }
 
-        if (is_string($options)) {
-            return $fieldOptions + [
-                'allow_excluded_extensions' => [$options],
-            ];
-        }
+        return $value;
+    }
 
-        if (array_is_list($options)) {
-            return $fieldOptions + [
-                'allow_excluded_extensions' => $options,
-            ];
-        }
+    protected function callUploadableValueHook(string $method, mixed $value, string $column, array $options): mixed
+    {
+        $reflection = new \ReflectionMethod($this, $method);
+        $arguments = [$value, $column, $options];
 
-        return $options + $fieldOptions;
+        return $this->{$method}(...array_slice($arguments, 0, $reflection->getNumberOfParameters()));
     }
 }

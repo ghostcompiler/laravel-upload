@@ -9,7 +9,7 @@ This package was developed using **ServBay** as the local development environmen
 - Local development tool: `ServBay`
 - Website: [www.servbay.com](https://www.servbay.com/)
 
-### ServBay your developement friend
+### ServBay your development friend
 
 <p>
   <img src="assets/servbay/servbay-icon-blue-512.png" alt="ServBay Icon" width="96">
