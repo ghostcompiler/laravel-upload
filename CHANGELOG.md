@@ -4,6 +4,10 @@ All notable changes to Laravel Uploads are documented here.
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-04-27
+
+- Regenerate private upload URLs when a cached token points to a missing or expired upload link.
+
 ## [1.1.6] - 2026-04-27
 
 - Fixed a time-sensitive cache registry test so it passes consistently on Laravel 10.

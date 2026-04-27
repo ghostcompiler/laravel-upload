@@ -32,7 +32,11 @@ trait HandlesUploadUrls
             $cachedUrl = Cache::get($cacheKey);
 
             if (is_string($cachedUrl) && $cachedUrl !== '') {
-                return $cachedUrl;
+                if ($this->cachedPrivateUrlIsUsable($cachedUrl, $uploadId)) {
+                    return $cachedUrl;
+                }
+
+                Cache::forget($cacheKey);
             }
         }
 
@@ -127,6 +131,30 @@ trait HandlesUploadUrls
     protected function uploadUrlCacheKey(int $uploadId, int $minutes): string
     {
         return "laravel-uploads:url:{$uploadId}:{$minutes}";
+    }
+
+    protected function cachedPrivateUrlIsUsable(string $url, int $uploadId): bool
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (! is_string($path) || $path === '') {
+            return false;
+        }
+
+        $token = basename($path);
+
+        if (! is_string($token) || ! preg_match('/^[A-Za-z0-9]{64}$/', $token)) {
+            return false;
+        }
+
+        return UploadLink::query()
+            ->where('upload_id', $uploadId)
+            ->where('token', $token)
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->exists();
     }
 
     protected function uploadUrlCacheRegistryKey(int $uploadId): string

@@ -74,6 +74,28 @@ class LaravelUploadsManagerTest extends TestCase
         $this->assertSame(2, UploadLink::query()->count());
     }
 
+    public function test_it_regenerates_stale_cached_private_urls(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.cache.enabled', true);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('stale-cache.pdf', 24, 'application/pdf')
+        );
+
+        $firstUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+        $firstLink = UploadLink::query()->sole();
+        $cacheKey = "laravel-uploads:url:{$upload->id}:15";
+
+        $firstLink->delete();
+
+        $secondUrl = app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+
+        $this->assertNotSame($firstUrl, $secondUrl);
+        $this->assertSame($secondUrl, cache()->get($cacheKey));
+        $this->assertSame(1, UploadLink::query()->count());
+    }
+
     public function test_generated_url_cache_registry_expires_instead_of_living_forever(): void
     {
         Storage::fake('local');
