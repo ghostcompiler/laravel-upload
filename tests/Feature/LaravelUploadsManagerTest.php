@@ -98,12 +98,15 @@ class LaravelUploadsManagerTest extends TestCase
 
     public function test_generated_url_cache_registry_defaults_to_one_hour(): void
     {
+        $now = now()->startOfSecond();
+        $this->travelTo($now);
+
         config()->set('laravel-uploads.cache.registry_ttl', 60);
 
         $manager = new CacheRegistryTestManager();
         $expiresAt = $manager->exposedUploadUrlCacheRegistryExpiresAt(now()->addMinutes(15));
 
-        $this->assertEqualsWithDelta(60, now()->diffInMinutes($expiresAt), 0.01);
+        $this->assertSame($now->copy()->addHour()->getTimestamp(), $expiresAt->getTimestamp());
     }
 
     public function test_it_can_disable_generated_url_caching(): void

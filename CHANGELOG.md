@@ -4,6 +4,10 @@ All notable changes to Laravel Uploads are documented here.
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-04-27
+
+- Fixed a time-sensitive cache registry test so it passes consistently on Laravel 10.
+
 ## [1.1.5] - 2026-04-27
 
 - Changed the default `cache.registry_ttl` to `60` minutes.
