@@ -6,9 +6,10 @@ use GhostCompiler\LaravelUploads\Contracts\ResolvesUploadUrls;
 use GhostCompiler\LaravelUploads\Exceptions\LaravelUploadsException;
 use GhostCompiler\LaravelUploads\Models\Upload;
 use GhostCompiler\LaravelUploads\Models\UploadLink;
-use Illuminate\Filesystem\FilesystemAdapter;
+use GhostCompiler\LaravelUploads\Services\Concerns\HandlesStoragePaths;
+use GhostCompiler\LaravelUploads\Services\Concerns\HandlesUploadUrls;
+use GhostCompiler\LaravelUploads\Services\Concerns\ValidatesUploads;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -16,6 +17,10 @@ use RuntimeException;
 
 class LaravelUploadsManager implements ResolvesUploadUrls
 {
+    use HandlesStoragePaths;
+    use HandlesUploadUrls;
+    use ValidatesUploads;
+
     protected mixed $publicUrlResolver = null;
 
     public function upload(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): Upload
@@ -215,140 +220,6 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $options;
     }
 
-    protected function validateUploadedFile(UploadedFile $file, array $options = []): void
-    {
-        $this->validateUploadSize($file);
-        $this->validateUploadType($file, $options);
-        $this->validateImageDimensions($file, $options);
-    }
-
-    protected function validateUploadSize(UploadedFile $file): void
-    {
-        $maxSize = config('laravel-uploads.validation.max_size');
-
-        if ($maxSize === null) {
-            return;
-        }
-
-        $maxSize = (int) $maxSize;
-
-        if ($maxSize > 0 && (int) $file->getSize() > $maxSize) {
-            throw new LaravelUploadsException("LaravelUploads: Uploaded file exceeds the maximum size of {$maxSize} bytes.");
-        }
-    }
-
-    protected function validateUploadType(UploadedFile $file, array $options = []): void
-    {
-        $mimeType = $this->detectMimeType($file);
-        $extension = strtolower((string) $file->getClientOriginalExtension());
-        $allowedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.allowed_mime_types', $options['allowed_mime_types'] ?? null);
-        $allowedExtensions = $this->normalizeConfigList('laravel-uploads.validation.allowed_extensions', $options['allowed_extensions'] ?? null);
-        $excludedMimeTypes = $this->normalizeConfigList('laravel-uploads.validation.excluded_mime_types', $options['excluded_mime_types'] ?? null);
-        $excludedExtensions = $this->normalizeConfigList('laravel-uploads.validation.excluded_extensions', $options['excluded_extensions'] ?? null);
-        $neverAllowedExtensions = $this->neverAllowedExtensions();
-        $allowedExcludedExtensions = $this->normalizeValueList($options['allow_excluded_extensions'] ?? []);
-        $allowsExcludedExtension = $extension !== '' && in_array($extension, $allowedExcludedExtensions, true);
-
-        if ($extension !== '' && in_array($extension, $neverAllowedExtensions, true)) {
-            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are never allowed.");
-        }
-
-        if (! $allowsExcludedExtension && $mimeType !== '' && in_array($mimeType, $excludedMimeTypes, true)) {
-            throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are excluded.");
-        }
-
-        if (! $allowsExcludedExtension && $extension !== '' && in_array($extension, $excludedExtensions, true)) {
-            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are excluded.");
-        }
-
-        if (! $allowsExcludedExtension && $allowedMimeTypes !== [] && ($mimeType === '' || ! in_array($mimeType, $allowedMimeTypes, true))) {
-            throw new LaravelUploadsException("LaravelUploads: Uploads with mime type [{$mimeType}] are not allowed.");
-        }
-
-        if (! $allowsExcludedExtension && $allowedExtensions !== [] && ($extension === '' || ! in_array($extension, $allowedExtensions, true))) {
-            throw new LaravelUploadsException("LaravelUploads: Uploads with extension [{$extension}] are not allowed.");
-        }
-
-        if ($this->resolveUploadVariant($options) === 'favicon' && ! $this->isSupportedFaviconSource($file, $mimeType, $extension)) {
-            throw new LaravelUploadsException('LaravelUploads: Favicon uploads must be ICO, PNG, JPEG, or WEBP images.');
-        }
-    }
-
-    protected function validateImageDimensions(UploadedFile $file, array $options = []): void
-    {
-        if (
-            ! $this->isCompressibleImage($file)
-            || (! $this->shouldCompressImages() && $this->resolveUploadVariant($options) !== 'favicon')
-        ) {
-            return;
-        }
-
-        $realPath = $file->getRealPath();
-
-        if (! is_string($realPath) || ! is_file($realPath)) {
-            return;
-        }
-
-        $dimensions = @getimagesize($realPath);
-
-        if ($dimensions === false) {
-            return;
-        }
-
-        [$width, $height] = $dimensions;
-        $maxWidth = (int) config('laravel-uploads.image_optimization.max_input_width', 8000);
-        $maxHeight = (int) config('laravel-uploads.image_optimization.max_input_height', 8000);
-        $maxPixels = (int) config('laravel-uploads.image_optimization.max_input_pixels', 20000000);
-        $pixels = $width * $height;
-
-        if (($maxWidth > 0 && $width > $maxWidth) || ($maxHeight > 0 && $height > $maxHeight) || ($maxPixels > 0 && $pixels > $maxPixels)) {
-            throw new LaravelUploadsException('LaravelUploads: Uploaded image dimensions exceed the configured safety limits.');
-        }
-    }
-
-    protected function normalizeConfigList(string $key, mixed $override = null): array
-    {
-        $values = $override ?? config($key, []);
-
-        if (! is_array($values)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map(
-            fn ($value) => strtolower(trim((string) $value)),
-            $values
-        ), fn ($value) => $value !== ''));
-    }
-
-    protected function neverAllowedExtensions(): array
-    {
-        return array_values(array_unique([
-            ...$this->normalizeConfigList('laravel-uploads.validation.never_allowed_extensions'),
-            'phar',
-            'php',
-            'php3',
-            'php4',
-            'php5',
-            'phtml',
-        ]));
-    }
-
-    protected function normalizeValueList(mixed $values): array
-    {
-        if (is_string($values)) {
-            $values = [$values];
-        }
-
-        if (! is_array($values)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map(
-            fn ($value) => strtolower(trim((string) $value)),
-            $values
-        ), fn ($value) => $value !== ''));
-    }
-
     protected function defaultVisibility(): string
     {
         $visibility = strtolower(trim((string) config(
@@ -387,67 +258,6 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         }
 
         return $variant !== '' ? $variant : null;
-    }
-
-    protected function disk(): string
-    {
-        return (string) config('laravel-uploads.disk', config('filesystems.default', 'local'));
-    }
-
-    protected function directoryFor(?string $path = null): string
-    {
-        $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
-        $directory = $this->normalizeRelativePath((string) $path, 'upload path', true);
-
-        return $directory !== '' ? "{$basePath}/{$directory}" : $basePath;
-    }
-
-    protected function normalizeRelativePath(string $path, string $label, bool $allowEmpty = false): string
-    {
-        $originalPath = $path;
-        $path = trim(str_replace('\\', '/', $path), '/');
-
-        if ($path === '') {
-            if ($allowEmpty) {
-                return '';
-            }
-
-            throw new LaravelUploadsException("LaravelUploads: Invalid {$label}.");
-        }
-
-        if (str_starts_with($originalPath, '/') || str_starts_with($originalPath, '\\') || preg_match('/^[A-Za-z]:[\\\\\\/]/', $originalPath)) {
-            throw new LaravelUploadsException("LaravelUploads: Unsafe {$label}.");
-        }
-
-        $segments = explode('/', $path);
-
-        foreach ($segments as $segment) {
-            if ($segment === '' || $segment === '.' || $segment === '..' || preg_match('/[\x00-\x1F\x7F]/', $segment)) {
-                throw new LaravelUploadsException("LaravelUploads: Unsafe {$label}.");
-            }
-        }
-
-        return implode('/', $segments);
-    }
-
-    public function isSafeStoragePath(string $path): bool
-    {
-        try {
-            $path = $this->normalizeRelativePath($path, 'storage path');
-            $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
-        } catch (LaravelUploadsException) {
-            return false;
-        }
-
-        return $path === $basePath || str_starts_with($path, "{$basePath}/");
-    }
-
-    public function isSafeUpload(Upload $upload, ?FilesystemAdapter $disk = null): bool
-    {
-        $disk ??= Storage::disk($upload->disk);
-
-        return $this->isSafeStoragePath($upload->path)
-            && $this->isContainedWithinBaseDirectory($disk, $upload->path);
     }
 
     protected function generateFilename(UploadedFile $file): string
@@ -1152,13 +962,6 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return $value > 0 ? $value : null;
     }
 
-    protected function detectMimeType(UploadedFile $file): ?string
-    {
-        $mimeType = strtolower(trim((string) $file->getMimeType()));
-
-        return $mimeType !== '' ? $mimeType : null;
-    }
-
     protected function isSupportedFaviconSource(UploadedFile $file, ?string $mimeType = null, ?string $extension = null): bool
     {
         $mimeType ??= $this->detectMimeType($file);
@@ -1281,58 +1084,6 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             || $extension === 'ico';
     }
 
-    protected function isContainedWithinBaseDirectory(FilesystemAdapter $disk, string $path): bool
-    {
-        if (! method_exists($disk, 'path')) {
-            return true;
-        }
-
-        try {
-            $basePath = $this->normalizeRelativePath((string) config('laravel-uploads.base_path', 'LaravelUploads'), 'base_path');
-            $absoluteBasePath = $this->canonicalizeAbsolutePath($disk->path($basePath));
-            $absoluteTargetPath = $this->canonicalizeAbsolutePath($disk->path($path));
-        } catch (\Throwable) {
-            return false;
-        }
-
-        return $absoluteTargetPath === $absoluteBasePath
-            || str_starts_with($absoluteTargetPath, $absoluteBasePath.'/');
-    }
-
-    protected function canonicalizeAbsolutePath(string $path): string
-    {
-        $normalized = str_replace('\\', '/', trim($path));
-        $prefix = '';
-
-        if (preg_match('/^[A-Za-z]:\//', $normalized) === 1) {
-            $prefix = substr($normalized, 0, 2);
-            $normalized = substr($normalized, 2);
-        }
-
-        if (str_starts_with($normalized, '/')) {
-            $normalized = ltrim($normalized, '/');
-            $prefix .= '/';
-        }
-
-        $segments = [];
-
-        foreach (explode('/', $normalized) as $segment) {
-            if ($segment === '' || $segment === '.') {
-                continue;
-            }
-
-            if ($segment === '..') {
-                array_pop($segments);
-
-                continue;
-            }
-
-            $segments[] = $segment;
-        }
-
-        return rtrim($prefix.implode('/', $segments), '/') ?: '/';
-    }
-
     protected function avifSupportMessage(): string
     {
         $reasons = [];
@@ -1367,160 +1118,4 @@ class LaravelUploadsManager implements ResolvesUploadUrls
         return implode(' ', array_unique($reasons));
     }
 
-    protected function resolveUrlForUploadId(int $uploadId, ?int $expiry = null, ?Upload $upload = null): ?string
-    {
-        $upload ??= $this->find($uploadId);
-
-        if (! $upload) {
-            return null;
-        }
-
-        if ($upload->visibility === 'public') {
-            return $this->publicUrlForUpload($upload);
-        }
-
-        $minutes = $this->resolveLinkExpiryMinutes($expiry);
-        $cacheEnabled = $this->shouldCacheGeneratedUrls() && $minutes > 0;
-        $cacheKey = $this->uploadUrlCacheKey($uploadId, $minutes);
-
-        if ($cacheEnabled) {
-            $cachedUrl = Cache::get($cacheKey);
-
-            if (is_string($cachedUrl) && $cachedUrl !== '') {
-                return $cachedUrl;
-            }
-        }
-
-        $link = $this->createLink($upload, $minutes);
-        $url = $link->url();
-
-        if ($cacheEnabled && $link->expires_at) {
-            Cache::put($cacheKey, $url, $link->expires_at);
-            $this->rememberUploadUrlCacheKey($uploadId, $cacheKey);
-        }
-
-        return $url;
-    }
-
-    protected function publicUrlForUpload(Upload $upload): ?string
-    {
-        $disk = Storage::disk($upload->disk);
-
-        if (! $this->isSafeUpload($upload, $disk)) {
-            return null;
-        }
-
-        $resolvedUrl = $this->resolvePublicUrlWithCustomResolver($upload, $disk);
-
-        if ($resolvedUrl !== null) {
-            return $resolvedUrl;
-        }
-
-        try {
-            return $disk->url($upload->path);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    protected function resolvePublicUrlWithCustomResolver(Upload $upload, FilesystemAdapter $disk): ?string
-    {
-        $resolver = $this->publicUrlResolver ?? config('laravel-uploads.urls.public_resolver');
-
-        if (! $resolver) {
-            return null;
-        }
-
-        if (is_string($resolver) && class_exists($resolver)) {
-            $resolver = app($resolver);
-        }
-
-        if (is_object($resolver) && method_exists($resolver, 'publicUrl')) {
-            $resolver = [$resolver, 'publicUrl'];
-        }
-
-        if (! is_callable($resolver)) {
-            return null;
-        }
-
-        try {
-            $url = $resolver($upload, $disk, $upload->path);
-        } catch (\Throwable $exception) {
-            Log::warning('LaravelUploads: Public URL resolver failed. '.$exception->getMessage());
-
-            return null;
-        }
-
-        $url = is_string($url) ? trim($url) : '';
-
-        return $url !== '' ? $url : null;
-    }
-
-    protected function createLink(Upload $upload, ?int $expiry = null): UploadLink
-    {
-        $minutes = $this->resolveLinkExpiryMinutes($expiry);
-
-        return UploadLink::query()->create([
-            'upload_id' => $upload->id,
-            'token' => Str::random(64),
-            'expires_at' => now()->addMinutes($minutes),
-        ]);
-    }
-
-    protected function resolveLinkExpiryMinutes(?int $expiry = null): int
-    {
-        $minutes = $expiry ?? (int) config('laravel-uploads.defaults.expiry', 60);
-
-        return max(0, $minutes);
-    }
-
-    protected function shouldCacheGeneratedUrls(): bool
-    {
-        return (bool) config('laravel-uploads.cache.enabled', true);
-    }
-
-    protected function uploadUrlCacheKey(int $uploadId, int $minutes): string
-    {
-        return "laravel-uploads:url:{$uploadId}:{$minutes}";
-    }
-
-    protected function uploadUrlCacheRegistryKey(int $uploadId): string
-    {
-        return "laravel-uploads:url-keys:{$uploadId}";
-    }
-
-    protected function rememberUploadUrlCacheKey(int $uploadId, string $cacheKey): void
-    {
-        $registryKey = $this->uploadUrlCacheRegistryKey($uploadId);
-        $cacheKeys = Cache::get($registryKey, []);
-
-        if (! is_array($cacheKeys)) {
-            $cacheKeys = [];
-        }
-
-        if (! in_array($cacheKey, $cacheKeys, true)) {
-            $cacheKeys[] = $cacheKey;
-            Cache::forever($registryKey, $cacheKeys);
-        }
-    }
-
-    protected function forgetCachedUrlsForUploadId(int $uploadId): void
-    {
-        if (! $this->shouldCacheGeneratedUrls()) {
-            return;
-        }
-
-        $registryKey = $this->uploadUrlCacheRegistryKey($uploadId);
-        $cacheKeys = Cache::pull($registryKey, []);
-
-        if (! is_array($cacheKeys)) {
-            return;
-        }
-
-        foreach ($cacheKeys as $cacheKey) {
-            if (is_string($cacheKey) && $cacheKey !== '') {
-                Cache::forget($cacheKey);
-            }
-        }
-    }
 }

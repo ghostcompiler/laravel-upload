@@ -245,6 +245,8 @@ Important config keys:
 
 Full local development, path repository, validation, and security notes live in [DEVELOPER.md](DEVELOPER.md).
 
+Release history is documented in [CHANGELOG.md](CHANGELOG.md).
+
 ## Security Defaults
 
 - Upload paths are normalized and reject traversal such as `..`.
