@@ -49,15 +49,15 @@ trait LaravelUploads
 
     public function uploadUrl(string $column): ?string
     {
-        $config = $this->uploadableFields()[$column] ?? null;
+        $field = $this->uploadableField($column);
 
-        if (! $config) {
+        if (! $field) {
             return null;
         }
 
         return app(LaravelUploadsManager::class)->urlFromId(
-            $this->getRawOriginal($column),
-            $config['expiry']
+            $this->getRawOriginal($field['column']),
+            $field['options']['expiry']
         );
     }
 
@@ -117,13 +117,13 @@ trait LaravelUploads
 
     public function uploadableValue(string $column): mixed
     {
-        $config = $this->uploadableFields()[$column] ?? null;
+        $field = $this->uploadableField($column);
 
-        if (! $config) {
+        if (! $field) {
             return null;
         }
 
-        return $this->resolveUploadableValue($column, $config);
+        return $this->resolveUploadableValue($field['column'], $field['options']);
     }
 
     public function getAttribute($key)
@@ -174,6 +174,20 @@ trait LaravelUploads
         }
 
         return $value;
+    }
+
+    protected function uploadableField(string $columnOrName): ?array
+    {
+        foreach ($this->uploadableFields() as $column => $options) {
+            if ($column === $columnOrName || $options['name'] === $columnOrName) {
+                return [
+                    'column' => $column,
+                    'options' => $options,
+                ];
+            }
+        }
+
+        return null;
     }
 
     protected function callUploadableValueHook(string $method, mixed $value, string $column, array $options): mixed

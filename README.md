@@ -85,13 +85,37 @@ Now `$user->avatar` returns the file URL. In array or JSON responses, URL fields
 Customize returned values when needed:
 
 ```php
-public function setUploadableValue($value)
+public function setUploadableValue($value, string $column, array $options)
 {
-    return $value;
+    if ($column === 'avatar_id') {
+        return $value;
+    }
+
+    return [
+        'url' => $value,
+        'name' => $options['name'],
+    ];
 }
 ```
 
-You can also define a field-specific hook such as `setAvatarUploadableValue($value)`.
+You can also define field-specific hooks when a model has multiple uploadable fields:
+
+```php
+public function setAvatarUploadableValue($value)
+{
+    return $value;
+}
+
+public function setResumeUploadableValue($value)
+{
+    return [
+        'url' => $value,
+        'type' => 'resume',
+    ];
+}
+```
+
+Use `$user->avatar` for direct access. Use `$user->toArray()` or API responses only when that field has `expose => true`.
 
 ## Public And Private URLs
 
