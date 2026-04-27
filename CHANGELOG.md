@@ -4,6 +4,10 @@ All notable changes to Laravel Uploads are documented here.
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-04-27
+
+- Changed the private file route middleware default to `[]` so host app `web` middleware cannot redirect file/image requests before streaming.
+
 ## [1.1.7] - 2026-04-27
 
 - Regenerate private upload URLs when a cached token points to a missing or expired upload link.

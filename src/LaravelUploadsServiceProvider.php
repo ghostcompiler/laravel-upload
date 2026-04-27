@@ -38,7 +38,7 @@ class LaravelUploadsServiceProvider extends ServiceProvider
             ]);
         }
 
-        Route::middleware(config('laravel-uploads.route.middleware', ['web']))
+        Route::middleware(config('laravel-uploads.route.middleware', []))
             ->prefix(config('laravel-uploads.route.prefix', '_laravel-uploads'))
             ->group(function (): void {
                 Route::get('/file/{token}', [UploadController::class, 'show'])

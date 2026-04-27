@@ -315,6 +315,18 @@ SVG is not included in the default `preview_mime_types` list because inline SVG 
 ],
 ```
 
+## Private File Route Middleware
+
+The private file route defaults to no route middleware:
+
+```php
+'route' => [
+    'middleware' => [],
+],
+```
+
+This avoids host app `web`, auth, Inertia, tenant dashboard, or MFA middleware redirecting image/file requests before the package controller can stream the file. Add middleware only when it is safe for direct file requests.
+
 ## Operational Security Checklist
 
 - Keep `validation.max_size` strict for the application.

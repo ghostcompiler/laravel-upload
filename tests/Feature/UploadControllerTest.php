@@ -9,6 +9,14 @@ use Illuminate\Support\Facades\Storage;
 
 class UploadControllerTest extends TestCase
 {
+    public function test_private_file_route_has_no_middleware_by_default(): void
+    {
+        $route = app('router')->getRoutes()->getByName('laravel-uploads.show');
+
+        $this->assertNotNull($route);
+        $this->assertSame([], $route->gatherMiddleware());
+    }
+
     public function test_it_streams_previewable_private_files_inline_and_updates_access_time(): void
     {
         Storage::fake('local');

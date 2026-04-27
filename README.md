@@ -242,7 +242,7 @@ Important config keys:
 - `urls.public_resolver`: optional tenant/CDN resolver for public upload URLs.
 - `preview_mime_types`: MIME types allowed to open inline.
 - `delete_files_with_model`: delete stored files when the model is deleted.
-- `route.*`: package file-serving route settings.
+- `route.*`: package file-serving route settings. `route.middleware` defaults to `[]` so app `web` middleware cannot redirect image/file requests.
 
 Full local development, path repository, validation, and security notes live in [DEVELOPER.md](DEVELOPER.md).
 

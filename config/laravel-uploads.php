@@ -105,6 +105,6 @@ return [
     'route' => [
         'prefix' => '_laravel-uploads',
         'name' => 'laravel-uploads.show',
-        'middleware' => ['web'],
+        'middleware' => [],
     ],
 ];
