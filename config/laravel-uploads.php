@@ -10,7 +10,7 @@ return [
         'type' => 'private',
         'id' => 'hide',
         'expiry' => 60,
-        'expose' => false,
+        'expose' => true,
         'variant' => null,
     ],
 

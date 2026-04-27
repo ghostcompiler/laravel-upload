@@ -71,7 +71,7 @@ class LaravelUploadsTraitTest extends TestCase
         $this->assertStringContainsString('/_laravel-uploads/file/', $attributes['avatar']);
     }
 
-    public function test_it_does_not_expose_upload_urls_in_serialized_attributes_by_default(): void
+    public function test_it_can_disable_upload_url_exposure_for_serialized_attributes(): void
     {
         $upload = Upload::query()->create([
             'disk' => 'local',
@@ -216,6 +216,7 @@ class SecureTestUser extends Model
             'visibility' => 'private',
             'id' => 'hide',
             'expiry' => 60,
+            'expose' => false,
         ],
     ];
 }

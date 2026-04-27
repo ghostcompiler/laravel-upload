@@ -321,5 +321,5 @@ SVG is not included in the default `preview_mime_types` list because inline SVG 
 - Enable `image_optimization.strict` when storing original images after conversion failure is not acceptable.
 - Use Laravel throttling, queue worker limits, web server upload limits, or a WAF for high-volume upload endpoints.
 - Schedule `php artisan ghost:laravel-uploads-clean` to remove expired private URL tokens.
-- Use `expose => true` only for upload fields that are safe to return in API responses.
+- Set `expose => false` for upload fields that should not be returned in API responses.
 - Use `Uploads::resolvePublicUrlsUsing(...)` or `urls.public_resolver` for multi-tenant public upload URLs.

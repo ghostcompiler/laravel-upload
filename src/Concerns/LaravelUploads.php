@@ -108,7 +108,7 @@ trait LaravelUploads
                 'variant' => $variant ? strtolower(trim((string) $variant)) : null,
                 'id' => Arr::get($options, 'id', Arr::get($defaults, 'id', 'hide')),
                 'expiry' => (int) Arr::get($options, 'expiry', Arr::get($defaults, 'expiry', 60)),
-                'expose' => (bool) Arr::get($options, 'expose', Arr::get($defaults, 'expose', false)),
+                'expose' => (bool) Arr::get($options, 'expose', Arr::get($defaults, 'expose', true)),
             ];
         }
 

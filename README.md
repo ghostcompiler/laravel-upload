@@ -74,13 +74,12 @@ class User extends Authenticatable
             'name' => 'avatar',
             'id' => 'hide',
             'expiry' => 60,
-            'expose' => true,
         ],
     ];
 }
 ```
 
-Now `$user->avatar` returns the file URL. In array or JSON responses, URL fields are only included when `expose` is `true`.
+Now `$user->avatar` returns the file URL. In array or JSON responses, URL fields are included by default. Set `expose => false` on a field when you do not want that URL serialized.
 
 Customize returned values when needed:
 
@@ -115,7 +114,7 @@ public function setResumeUploadableValue($value)
 }
 ```
 
-Use `$user->avatar` for direct access. Use `$user->toArray()` or API responses only when that field has `expose => true`.
+Use `$user->avatar` for direct access. Use `$user->toArray()` or API responses when you want the configured uploadable URL fields serialized.
 
 ## Public And Private URLs
 
@@ -251,7 +250,7 @@ Full local development, path repository, validation, and security notes live in 
 - Upload paths are normalized and reject traversal such as `..`.
 - MIME validation uses server-side detection.
 - SVG is downloaded by default instead of previewed inline.
-- Model URL exposure is opt-in through `expose`.
+- Model URL exposure is enabled by default and can be disabled with `expose => false`.
 - Public uploads use the disk URL directly.
 - Private uploads use expiring package tokens.
 

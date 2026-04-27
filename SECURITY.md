@@ -50,7 +50,7 @@ Laravel Uploads is designed with defense-in-depth protections, but upload securi
 - Private uploads use expiring package tokens instead of direct public file paths.
 - Public uploads return disk or configured tenant/CDN URLs directly and do not create private token rows.
 - SVG files are never previewed inline by the package controller, even if `image/svg+xml` is added to `preview_mime_types`.
-- Model URL serialization is opt-in through `expose`.
+- Model URL serialization is enabled by default and can be disabled per field with `expose => false`.
 
 ### Application Responsibilities
 
@@ -58,7 +58,7 @@ Laravel Uploads is designed with defense-in-depth protections, but upload securi
 - Keep image limits such as `max_input_width`, `max_input_height`, `max_input_pixels`, and `max_output_pixels` conservative when image optimization is enabled.
 - Use Laravel throttling, queues, web server request limits, or a WAF to reduce upload-based DoS risk.
 - Schedule `php artisan ghost:laravel-uploads-clean` so expired private URL tokens do not grow indefinitely.
-- Use `expose => true` only for fields that are safe to include in API responses.
+- Set `expose => false` for upload fields that should not be included in API responses.
 - For multi-tenant public uploads, configure `urls.public_resolver` or `Uploads::resolvePublicUrlsUsing(...)` so public URLs use the correct tenant domain.
 
 ### Image Optimization Behavior
