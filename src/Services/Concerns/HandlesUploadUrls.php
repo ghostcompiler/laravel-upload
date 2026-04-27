@@ -152,7 +152,7 @@ trait HandlesUploadUrls
 
     protected function uploadUrlCacheRegistryExpiresAt(mixed $expiresAt): \DateTimeInterface
     {
-        $registryTtl = max(1, (int) config('laravel-uploads.cache.registry_ttl', 10080));
+        $registryTtl = max(1, (int) config('laravel-uploads.cache.registry_ttl', 60));
         $registryExpiresAt = now()->addMinutes($registryTtl);
 
         if ($expiresAt instanceof \DateTimeInterface && $expiresAt > $registryExpiresAt) {

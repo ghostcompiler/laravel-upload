@@ -4,6 +4,10 @@ All notable changes to Laravel Uploads are documented here.
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-04-27
+
+- Changed the default `cache.registry_ttl` to `60` minutes.
+
 ## [1.1.4] - 2026-04-27
 
 - Changed the generated URL cache-key registry to expire instead of being stored forever.

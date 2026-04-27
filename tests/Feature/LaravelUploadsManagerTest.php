@@ -96,6 +96,16 @@ class LaravelUploadsManagerTest extends TestCase
         $this->assertNull(cache()->get($registryKey));
     }
 
+    public function test_generated_url_cache_registry_defaults_to_one_hour(): void
+    {
+        config()->set('laravel-uploads.cache.registry_ttl', 60);
+
+        $manager = new CacheRegistryTestManager();
+        $expiresAt = $manager->exposedUploadUrlCacheRegistryExpiresAt(now()->addMinutes(15));
+
+        $this->assertEqualsWithDelta(60, now()->diffInMinutes($expiresAt), 0.01);
+    }
+
     public function test_it_can_disable_generated_url_caching(): void
     {
         Storage::fake('local');
@@ -524,5 +534,13 @@ class TenantPublicUrlResolver
     public function publicUrl(Upload $upload, $disk, string $path): string
     {
         return 'https://configured-tenant.test/storage/'.$path;
+    }
+}
+
+class CacheRegistryTestManager extends LaravelUploadsManager
+{
+    public function exposedUploadUrlCacheRegistryExpiresAt(mixed $expiresAt): \DateTimeInterface
+    {
+        return $this->uploadUrlCacheRegistryExpiresAt($expiresAt);
     }
 }
