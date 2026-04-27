@@ -174,6 +174,7 @@ Use a real Laravel test project and verify:
 - upload paths must stay relative and cannot contain traversal segments
 - generated URLs are tracked in the database
 - generated URLs are cached by upload ID and expiry when `cache.enabled` is `true`
+- generated URL cache registries expire automatically and are used only to clear cached URLs when an upload is deleted
 - image optimization only applies to supported images
 - AVIF is tried first
 - WEBP is used as the main fallback format

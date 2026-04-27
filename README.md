@@ -229,6 +229,7 @@ Important config keys:
 - `defaults.expiry`: private URL expiry in minutes.
 - `defaults.expose`: whether model serialization appends URL fields by default.
 - `cache.enabled`: reuse private generated URLs until expiry.
+- `cache.registry_ttl`: minutes to keep the internal cache-key registry used for deleting cached private URLs.
 - `validation.max_size`: max upload size in bytes.
 - `validation.allowed_mime_types`: optional server-detected MIME allowlist.
 - `validation.allowed_extensions`: optional extension allowlist.

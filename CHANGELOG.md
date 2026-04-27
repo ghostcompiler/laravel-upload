@@ -4,6 +4,11 @@ All notable changes to Laravel Uploads are documented here.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-04-27
+
+- Changed the generated URL cache-key registry to expire instead of being stored forever.
+- Added `cache.registry_ttl` configuration for the internal generated URL cache-key registry.
+
 ## [1.1.3] - 2026-04-27
 
 - Refactored upload manager internals into focused service concerns for path safety, validation, and URL generation.
@@ -43,7 +48,8 @@ All notable changes to Laravel Uploads are documented here.
 - Improved file streaming to avoid loading downloads fully into PHP memory.
 - Prevented upload metadata persistence when storage writes fail.
 
-[Unreleased]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.4...HEAD
+[1.1.4]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ghostcompiler/laravel-upload/compare/v1.1.0...v1.1.1

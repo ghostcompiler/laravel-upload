@@ -18,6 +18,7 @@ return [
     // a new UploadLink row on every request. Cache lifetime matches the URL expiry.
     'cache' => [
         'enabled' => true,
+        'registry_ttl' => 10080,
     ],
 
     'validation' => [

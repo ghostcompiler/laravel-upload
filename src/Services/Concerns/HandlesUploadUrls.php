@@ -41,7 +41,7 @@ trait HandlesUploadUrls
 
         if ($cacheEnabled && $link->expires_at) {
             Cache::put($cacheKey, $url, $link->expires_at);
-            $this->rememberUploadUrlCacheKey($uploadId, $cacheKey);
+            $this->rememberUploadUrlCacheKey($uploadId, $cacheKey, $link->expires_at);
         }
 
         return $url;
@@ -134,7 +134,7 @@ trait HandlesUploadUrls
         return "laravel-uploads:url-keys:{$uploadId}";
     }
 
-    protected function rememberUploadUrlCacheKey(int $uploadId, string $cacheKey): void
+    protected function rememberUploadUrlCacheKey(int $uploadId, string $cacheKey, mixed $expiresAt): void
     {
         $registryKey = $this->uploadUrlCacheRegistryKey($uploadId);
         $cacheKeys = Cache::get($registryKey, []);
@@ -145,8 +145,21 @@ trait HandlesUploadUrls
 
         if (! in_array($cacheKey, $cacheKeys, true)) {
             $cacheKeys[] = $cacheKey;
-            Cache::forever($registryKey, $cacheKeys);
         }
+
+        Cache::put($registryKey, $cacheKeys, $this->uploadUrlCacheRegistryExpiresAt($expiresAt));
+    }
+
+    protected function uploadUrlCacheRegistryExpiresAt(mixed $expiresAt): \DateTimeInterface
+    {
+        $registryTtl = max(1, (int) config('laravel-uploads.cache.registry_ttl', 10080));
+        $registryExpiresAt = now()->addMinutes($registryTtl);
+
+        if ($expiresAt instanceof \DateTimeInterface && $expiresAt > $registryExpiresAt) {
+            return $expiresAt;
+        }
+
+        return $registryExpiresAt;
     }
 
     protected function forgetCachedUrlsForUploadId(int $uploadId): void

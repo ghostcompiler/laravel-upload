@@ -74,6 +74,28 @@ class LaravelUploadsManagerTest extends TestCase
         $this->assertSame(2, UploadLink::query()->count());
     }
 
+    public function test_generated_url_cache_registry_expires_instead_of_living_forever(): void
+    {
+        Storage::fake('local');
+        config()->set('laravel-uploads.cache.enabled', true);
+        config()->set('laravel-uploads.cache.registry_ttl', 5);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            UploadedFile::fake()->create('registry.pdf', 24, 'application/pdf')
+        );
+
+        app(LaravelUploadsManager::class)->urlFromId($upload->id, 15);
+        $registryKey = "laravel-uploads:url-keys:{$upload->id}";
+
+        $this->assertNotNull(cache()->get($registryKey));
+
+        $this->travel(14)->minutes();
+        $this->assertNotNull(cache()->get($registryKey));
+
+        $this->travel(2)->minutes();
+        $this->assertNull(cache()->get($registryKey));
+    }
+
     public function test_it_can_disable_generated_url_caching(): void
     {
         Storage::fake('local');
