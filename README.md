@@ -1,5 +1,3 @@
-# Laravel Uploads
-
 <p align="center">
   <img src="https://res.cloudinary.com/djgvfl1tv/image/upload/v1780666791/logo_mqnqn4.png" alt="Laravel Uploads Logo" width="180">
 </p>
