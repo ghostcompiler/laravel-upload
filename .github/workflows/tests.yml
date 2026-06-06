@@ -58,6 +58,8 @@ jobs:
         run: composer require --dev "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "phpunit/phpunit:${{ matrix.phpunit }}" --no-interaction --no-update
 
       - name: Install dependencies
+        env:
+          COMPOSER_NO_BLOCKING: 1
         run: composer update --prefer-dist --no-interaction ${{ matrix.dependency-flags }}
 
       - name: Run tests
