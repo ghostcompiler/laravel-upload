@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-    <img src="https://img.shields.io/github/stars/ghostcompiler/laravel-upload?style=for-the-badge&logo=github" />
-    <img src="https://img.shields.io/packagist/dt/ghostcompiler/laravel-upload?style=for-the-badge&logo=packagist" />
+    <img src="https://img.shields.io/github/stars/ghostcompiler/laravel-uploads?style=for-the-badge&logo=github" />
+    <img src="https://img.shields.io/packagist/dt/ghostcompiler/laravel-uploads?style=for-the-badge&logo=packagist" />
 </p>
 
 Laravel Uploads stores files through Laravel Storage, tracks upload metadata, generates secure private file URLs, supports public disk URLs, integrates with Eloquent models, and can optionally optimize browser images.
