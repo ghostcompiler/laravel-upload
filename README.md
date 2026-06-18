@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-    <img src="https://img.shields.io/github/stars/ghostcompiler/laravel-uploads?style=for-the-badge&logo=github" />
+    <img src="https://img.shields.io/github/stars/ghostcompiler/laravel-upload?style=for-the-badge&logo=github" />
     <img src="https://img.shields.io/packagist/dt/ghostcompiler/laravel-uploads?style=for-the-badge&logo=packagist" />
 </p>
 
