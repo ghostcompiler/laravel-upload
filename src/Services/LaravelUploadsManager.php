@@ -25,8 +25,38 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
     public function upload(UploadedFile|string $pathOrFile, UploadedFile|array|string|null $file = null, array|string|null $options = []): Upload
     {
-        [$path, $file, $options] = $this->parseUploadArguments($pathOrFile, $file, $options);
+        [$path, $fileOrUrl, $options] = $this->parseUploadArguments($pathOrFile, $file, $options);
         $visibility = $this->resolveUploadVisibility($options);
+
+        if (is_string($fileOrUrl) && $this->isValidUrl($fileOrUrl)) {
+            $originalName = basename(parse_url($fileOrUrl, PHP_URL_PATH) ?: 'download');
+            $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+
+            try {
+                $response = \Illuminate\Support\Facades\Http::timeout(5)->head($fileOrUrl);
+                $mimeType = $response->header('Content-Type');
+                $size = $response->header('Content-Length');
+            } catch (\Throwable) {
+                $mimeType = null;
+                $size = null;
+            }
+
+            return Upload::query()->create([
+                'disk' => 'url',
+                'visibility' => $visibility,
+                'path' => $fileOrUrl,
+                'original_name' => $originalName,
+                'mime_type' => $mimeType,
+                'extension' => $extension,
+                'size' => $size ? (int) $size : null,
+                'metadata' => [
+                    'uploaded_at' => now()?->toIso8601String(),
+                    'is_url' => true,
+                ],
+            ]);
+        }
+
+        $file = $fileOrUrl;
         $this->validateUploadedFile($file, $options);
         $disk = $this->disk();
         $directory = $this->directoryFor($path);
@@ -125,6 +155,11 @@ class LaravelUploadsManager implements ResolvesUploadUrls
 
         $this->forgetCachedUrlsForUploadId((int) $upload->getKey());
 
+        if ($upload->disk === 'url') {
+            UploadLink::query()->where('upload_id', $upload->id)->delete();
+            return (bool) $upload->delete();
+        }
+
         $disk = Storage::disk($upload->disk);
 
         if (! $this->isSafeUpload($upload, $disk)) {
@@ -177,7 +212,7 @@ class LaravelUploadsManager implements ResolvesUploadUrls
     {
         $options = $this->normalizeUploadOptions($options);
 
-        if ($pathOrFile instanceof UploadedFile) {
+        if ($pathOrFile instanceof UploadedFile || (is_string($pathOrFile) && $this->isValidUrl($pathOrFile))) {
             if (is_array($file)) {
                 $options = $this->normalizeUploadOptions($file) + $options;
             }
@@ -189,14 +224,24 @@ class LaravelUploadsManager implements ResolvesUploadUrls
             return [null, $pathOrFile, $options];
         }
 
-        if (! $file instanceof UploadedFile) {
-            $message = 'LaravelUploads: A valid uploaded file is required.';
+        if (! $file instanceof UploadedFile && ! (is_string($file) && $this->isValidUrl($file))) {
+            $message = 'LaravelUploads: A valid uploaded file or URL is required.';
             Log::error($message);
 
             throw new LaravelUploadsException($message);
         }
 
         return [$pathOrFile, $file, $options];
+    }
+
+    protected function isValidUrl(mixed $value): bool
+    {
+        if (! is_string($value)) {
+            return false;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_URL) !== false
+            && preg_match('/^https?:\/\//i', $value) === 1;
     }
 
     protected function normalizeUploadOptions(array|string|null $options): array

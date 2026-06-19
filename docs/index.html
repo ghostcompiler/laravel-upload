@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laravel Uploads Technical Documentation</title>
+  <meta name="description" content="Complete developer guides, Eloquent integrations, configuration references, and security details for the Laravel Uploads package.">
+  <meta name="author" content="Ghost Compiler">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#22c55e">
+  <meta name="application-name" content="Laravel Uploads Documentation">
+  <link rel="icon" href="https://res.cloudinary.com/djgvfl1tv/image/upload/v1780666791/logo_mqnqn4.png">
+  
+  <!-- Google Fonts Connection -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Laravel Uploads Technical Documentation",
+    "about": "Advanced File Attachment and Proxy Streaming Library for Laravel",
+    "author": {
+      "@type": "Organization",
+      "name": "Ghost Compiler"
+    },
+    "version": "1.0.0"
+  }
+  </script>
+</head>
+<body class="docs-page">
+  <header class="site-header docs-header">
+    <button id="mobileMenuBtn" class="mobile-menu-btn" aria-label="Toggle navigation">
+      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    <a class="brand" href="#overview">
+      <img src="https://res.cloudinary.com/djgvfl1tv/image/upload/v1780666791/logo_mqnqn4.png" alt="Ghost Compiler logo">
+      <span>Laravel Uploads</span>
+    </a>
+    <span class="version-pill">v1.0.0</span>
+    <div class="doc-search">
+      <input id="docSearch" type="search" placeholder="Search documentation">
+    </div>
+    <nav class="top-links">
+      <a href="#overview">Overview</a>
+      <a href="#installation">Install</a>
+      <a href="#configuration">Configuration</a>
+      <a href="#eloquent-trait">Eloquent</a>
+      
+      <!-- Segmented Theme Switcher Control -->
+      <div class="theme-segmented-control" role="radiogroup" aria-label="Theme switcher">
+        <button class="theme-control-btn" data-theme-val="light" aria-label="Light Mode" title="Light Mode">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+        <button class="theme-control-btn" data-theme-val="dark" aria-label="Dark Mode" title="Dark Mode">
+          <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <button class="theme-control-btn" data-theme-val="system" aria-label="System Mode" title="System Mode">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Overlay for mobile navigation drawer -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar" id="docsSidebar" aria-label="Documentation navigation">
+      <div class="sidebar-header-mobile">
+        <span>Navigation</span>
+        <button id="closeSidebarBtn" class="close-sidebar-btn" aria-label="Close navigation">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="sidebar-group">
+        <p>Start</p>
+        <a href="#overview">Overview</a>
+        <a href="#installation">Installation</a>
+        <a href="#configuration">Configuration Reference</a>
+      </div>
+      <div class="sidebar-group">
+        <p>API Reference</p>
+        <a href="#core-api">Core Manager APIs</a>
+        <a href="#eloquent-trait">Eloquent Integration</a>
+        <a href="#url-proxying">Dynamic URL Proxying</a>
+        <a href="#artisan-commands">Artisan Commands</a>
+        <a href="#route-serving">Route & Serving Mechanics</a>
+      </div>
+      <div class="sidebar-group">
+        <p>Security</p>
+        <a href="#security-defaults">Security Defaults</a>
+      </div>
+    </aside>
+
+    <main class="doc-article">
+      
+      <section id="overview" data-title="Overview">
+        <p class="eyebrow">Documentation v1.0.0</p>
+        <h1>Overview</h1>
+        <p class="lead">Laravel Uploads is a secure, structured library designed to simplify database-linked file storage, dynamic image optimization, private/expiring URL routing, and on-demand streaming proxy pipelines inside Laravel projects.</p>
+        <div class="callout">
+          <strong>Key Highlights.</strong>
+          Prevents path traversal attacks, blocks execution of script-based extensions, enforces secure downloads for vector graphics, performs OOM-safe image resizing, and streams external URLs directly without server-side disk caching.
+        </div>
+      </section>
+
+      <section id="installation" data-title="Installation">
+        <h2>Installation</h2>
+        <p>Ensure your environment satisfies the minimum requirements (PHP 8.1+ and Laravel 10 through 13). Install the library via Composer:</p>
+        <pre><code>composer require ghostcompiler/laravel-uploads</code></pre>
+        <p>Publish configuration settings and the database migration stub:</p>
+        <pre><code>php artisan install:laravel-uploads</code></pre>
+        <p>Run your migrations to generate target database tables:</p>
+        <pre><code>php artisan migrate</code></pre>
+        <div class="callout">
+          <strong>Override Publishing.</strong>
+          Use the <code>--force</code> flag to overwrite already-published configuration and migration files:
+          <pre style="margin-top: 8px;"><code>php artisan install:laravel-uploads --force</code></pre>
+        </div>
+      </section>
+
+      <section id="configuration" data-title="Configuration Reference">
+        <h2>Configuration Reference</h2>
+        <p>The configuration file publishes to <code>config/laravel-uploads.php</code>. Review the technical behavior of all available options below:</p>
+        
+        <div class="settings-table-wrapper" style="overflow-x: auto;">
+          <table class="settings-table" style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.95rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border); text-align: left; background: var(--header-bg);">
+                <th style="padding: 12px; font-weight: 600;">Key</th>
+                <th style="padding: 12px; font-weight: 600;">Type</th>
+                <th style="padding: 12px; font-weight: 600;">Default</th>
+                <th style="padding: 12px; font-weight: 600;">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">disk</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'local'</code></td>
+                <td style="padding: 12px;">Storage disk prefix configured in <code>config/filesystems.php</code> (e.g., <code>'local'</code>, <code>'s3'</code>).</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">base_path</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'LaravelUploads'</code></td>
+                <td style="padding: 12px;">Root directory prefix inside the storage disk where all package uploads are stored.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.visibility</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'private'</code></td>
+                <td style="padding: 12px;">Default accessibility. <code>'public'</code> uses direct filesystem URLs. <code>'private'</code> generates expiring routing tokens.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.type</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'private'</code></td>
+                <td style="padding: 12px;">Fallback visibility attribute setting for backward compatibility.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.id</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'hide'</code></td>
+                <td style="padding: 12px;">If set to <code>'hide'</code>, the model trait automatically unsets raw database ID columns from JSON responses.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.expiry</td>
+                <td style="padding: 12px;">int</td>
+                <td style="padding: 12px;"><code>60</code></td>
+                <td style="padding: 12px;">Validity duration (in minutes) for dynamically generated private file route tokens.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.expose</td>
+                <td style="padding: 12px;">bool</td>
+                <td style="padding: 12px;"><code>true</code></td>
+                <td style="padding: 12px;">If true, serializing Eloquent models appends the resolved URL field dynamically.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">defaults.variant</td>
+                <td style="padding: 12px;">string|null</td>
+                <td style="padding: 12px;"><code>null</code></td>
+                <td style="padding: 12px;">Default output variant settings for uploads (e.g. <code>'favicon'</code>).</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">cache.enabled</td>
+                <td style="padding: 12px;">bool</td>
+                <td style="padding: 12px;"><code>true</code></td>
+                <td style="padding: 12px;">Enables caching of tokenized file URLs to prevent high database link generation loads during API serialization.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">cache.registry_ttl</td>
+                <td style="padding: 12px;">int</td>
+                <td style="padding: 12px;"><code>60</code></td>
+                <td style="padding: 12px;">Registry caching lifespan in minutes for mapped token references.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">validation.max_size</td>
+                <td style="padding: 12px;">int|null</td>
+                <td style="padding: 12px;"><code>10485760</code></td>
+                <td style="padding: 12px;">Maximum upload size in bytes (default 10MB). Set to <code>null</code> to bypass file size checks.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">validation.allowed_mime_types</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[]</code></td>
+                <td style="padding: 12px;">Restricts file uploads to specific MIME types. Keep empty to permit all non-excluded types.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">validation.allowed_extensions</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[]</code></td>
+                <td style="padding: 12px;">Restricts file uploads to specific extensions. Keep empty to permit all non-excluded extensions.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">validation.excluded_extensions</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[...]</code></td>
+                <td style="padding: 12px;">Script and system types (<code>sh</code>, <code>py</code>, <code>cgi</code>, etc.) blocked by default but overrideable per-upload.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">validation.never_allowed_extensions</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[...]</code></td>
+                <td style="padding: 12px;">Strict PHP script targets (<code>php</code>, <code>phar</code>, <code>phtml</code>) that are always blocked and can never be overridden.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">image_optimization.enabled</td>
+                <td style="padding: 12px;">bool</td>
+                <td style="padding: 12px;"><code>false</code></td>
+                <td style="padding: 12px;">When active, converts JPEGs, PNGs, and WEBP uploads to highly compressed AVIF or WEBP images.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">image_optimization.quality</td>
+                <td style="padding: 12px;">int</td>
+                <td style="padding: 12px;"><code>75</code></td>
+                <td style="padding: 12px;">Output quality level for compiled graphics (values from 1 to 100).</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">image_optimization.max_width</td>
+                <td style="padding: 12px;">int|null</td>
+                <td style="padding: 12px;"><code>null</code></td>
+                <td style="padding: 12px;">Maximum width bound for resizing. Keeps original aspect ratio.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">image_optimization.max_height</td>
+                <td style="padding: 12px;">int|null</td>
+                <td style="padding: 12px;"><code>null</code></td>
+                <td style="padding: 12px;">Maximum height bound for resizing. Keeps original aspect ratio.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">image_optimization.max_output_pixels</td>
+                <td style="padding: 12px;">int</td>
+                <td style="padding: 12px;"><code>4000000</code></td>
+                <td style="padding: 12px;">Security boundary checking total pixel count (width * height) to prevent OOM process kills.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">favicon.size</td>
+                <td style="padding: 12px;">int</td>
+                <td style="padding: 12px;"><code>64</code></td>
+                <td style="padding: 12px;">Pixel dimensions (width/height square) for favicon compiled variants.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">downloads.use_original_name</td>
+                <td style="padding: 12px;">bool</td>
+                <td style="padding: 12px;"><code>false</code></td>
+                <td style="padding: 12px;">If true, serves the client-uploaded original file name instead of generic <code>upload-{id}.ext</code>.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">urls.public_resolver</td>
+                <td style="padding: 12px;">string|null</td>
+                <td style="padding: 12px;"><code>null</code></td>
+                <td style="padding: 12px;">Optional callback class name to resolve tenant-aware or CDN public asset URLs.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">preview_mime_types</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[...]</code></td>
+                <td style="padding: 12px;">MIME types allowed to render inline in browser pages (e.g. PDFs, TXT, JPEGs). Others force attachments.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">delete_files_with_model</td>
+                <td style="padding: 12px;">bool</td>
+                <td style="padding: 12px;"><code>false</code></td>
+                <td style="padding: 12px;">Triggers model lifecycle observers to delete physical files from storage when models delete.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">route.prefix</td>
+                <td style="padding: 12px;">string</td>
+                <td style="padding: 12px;"><code>'_laravel-uploads'</code></td>
+                <td style="padding: 12px;">URL path prefix for serving private files.</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px; font-family: var(--font-mono);">route.middleware</td>
+                <td style="padding: 12px;">array</td>
+                <td style="padding: 12px;"><code>[]</code></td>
+                <td style="padding: 12px;">Route middleware stacks applied to the file-serving endpoint.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="core-api" data-title="Core Manager APIs">
+        <h2>Core Manager APIs</h2>
+        <p>The <code>LaravelUploadsManager</code> class contains all methods to upload, retrieve, check, and delete files.</p>
+        
+        <h3>1. File Uploads</h3>
+        <p>Store files on the destination storage disk using the <code>upload()</code> method.</p>
+        <pre><code>use GhostCompiler\LaravelUploads\Facades\Uploads;
+
+// basic upload (uses default disk and base path)
+$upload = Uploads::upload($request->file('avatar'));
+
+// upload into a specific folder sub-path
+$upload = Uploads::upload('users/avatars', $request->file('avatar'));
+
+// upload with configuration override options
+$upload = Uploads::upload($request->file('avatar'), [
+    'visibility' => 'public',
+    'expiry' => 120, // override expiration to 2 hours
+]);</code></pre>
+
+        <h3>2. Upload Multiple Files</h3>
+        <p>Store an array of files in a single call using <code>uploadMany()</code>.</p>
+        <pre><code>// returns array of GhostCompiler\LaravelUploads\Models\Upload models
+$uploads = Uploads::uploadMany($request->file('photos'), 'galleries');</code></pre>
+
+        <h3>3. Retrieve Uploads</h3>
+        <p>Find an upload record in the database using the <code>find()</code> helper.</p>
+        <pre><code>$upload = Uploads::find($uploadId); // returns ?Upload model</code></pre>
+
+        <h3>4. File Deletion</h3>
+        <p>Delete the database record, clear the URL caches, and delete the physical storage file:</p>
+        <pre><code>// delete by passing the Upload model, ID integer, or ID string
+$success = Uploads::remove($uploadId); // returns bool</code></pre>
+      </section>
+
+      <section id="eloquent-trait" data-title="Eloquent Integration">
+        <h2>Eloquent Integration</h2>
+        <p>Apply the <code>GhostCompiler\LaravelUploads\Concerns\LaravelUploads</code> trait to link files to your tables.</p>
+        <pre><code>use GhostCompiler\LaravelUploads\Concerns\LaravelUploads;
+use Illuminate\Database\Eloquent\Model;
+
+class Document extends Model
+{
+    use LaravelUploads;
+
+    protected $uploadable = [
+        'file_id' => [
+            'name' => 'file',
+            'type' => 'private',
+            'expiry' => 15,
+        ],
+    ];
+}</code></pre>
+
+        <h3>Eloquent Features</h3>
+        <ul>
+          <li><strong>Automatic Hiding:</strong> The raw database key column (e.g. <code>file_id</code>) is automatically hidden in array and JSON serialization if configured.</li>
+          <li><strong>Virtual Attribute resolution:</strong> Accessing <code>$document->file</code> resolves to the tokenized or public URL directly.</li>
+          <li><strong>Eloquent Relation mapping:</strong> Retrieve the model relationship directly via:
+            <pre><code>$uploadModel = $document->upload('file_id'); // returns BelongsTo relationship</code></pre>
+          </li>
+        </ul>
+
+        <h3>Custom Hook Methods</h3>
+        <p>Intercept and customize resolved URLs by declaring hook methods in the model.</p>
+        
+        <p><strong>Field-specific Hooks:</strong> Pattern matches <code>set{FieldName}UploadableValue</code>.</p>
+        <pre><code>public function setAvatarUploadableValue($value, string $column, array $options)
+{
+    // returns the URL customized with URL query parameters
+    return $value . '?size=thumbnail';
+}</code></pre>
+
+        <p><strong>Model-wide Hook:</strong> Fallback hook pattern matches <code>setUploadableValue</code>.</p>
+        <pre><code>public function setUploadableValue($value, string $column, array $options)
+{
+    return [
+        'url' => $value,
+        'name' => $options['name'],
+        'visibility' => $options['visibility']
+    ];
+}</code></pre>
+      </section>
+
+      <section id="url-proxying" data-title="Dynamic URL Proxying">
+        <h2>Dynamic URL Proxying</h2>
+        <p>The package supports uploading external file URLs. Instead of downloading and saving physical files to local/S3 disks, the database stores the reference and proxies the file in real-time when accessed.</p>
+        
+        <h3>1. Storing URLs</h3>
+        <pre><code>// Store a remote image link as a reference
+$upload = Uploads::upload('https://avatar.example.com/profiles/avatar.jpg');
+
+// Storing under custom path/directory settings
+$upload = Uploads::upload('avatars', 'https://avatar.example.com/avatar.jpg', [
+    'visibility' => 'private'
+]);</code></pre>
+
+        <h3>2. Serving URLs</h3>
+        <p>When resolving URL-based uploads, the package routes the path through the secure package route <code>/_laravel-uploads/file/{token}</code>. The client browser never sees the original remote URL.</p>
+        <div class="callout">
+          <strong>Direct Streaming mechanics.</strong>
+          When a client opens the route, the server starts a dynamic stream request, buffering and printing the file bytes directly to the browser. This ensures that:
+          <ul>
+            <li>No temporary local file is saved to the hosting server.</li>
+            <li>No local memory cache is occupied.</li>
+            <li>If the file contents update on the remote provider under the same URL (e.g. OAuth avatar updates), the user sees the changes instantly.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="resolving-urls" data-title="Resolving URLs">
+        <h2>Resolving URLs</h2>
+        <p>Resolve file URLs using the manager instances:</p>
+        <pre><code>// 1. Resolve URL from an Upload instance
+$url = Uploads::url($upload, 30); // 30 minutes token expiration
+
+// 2. Resolve URL from an Upload ID database column
+$url = Uploads::urlFromId($uploadId, 60); // 60 minutes token expiration
+
+// 3. Register a public URL resolver callback (useful for CDN hosting or Multi-tenant apps)
+Uploads::resolvePublicUrlsUsing(function ($upload, $disk, $path) {
+    return "https://cdn.my-app.com/{$path}";
+});</code></pre>
+      </section>
+
+      <section id="artisan-commands" data-title="Artisan Commands">
+        <h2>Artisan Commands</h2>
+        <p>The package registers console commands for maintenance:</p>
+        
+        <h3>Prune Expired Links</h3>
+        <p>Prunes all expired temporary token links from the <code>laravel_uploads_links</code> table:</p>
+        <pre><code>php artisan ghost:laravel-uploads-clean</code></pre>
+        <p>Run a dry run execution to review the count of deletable records without pruning them:</p>
+        <pre><code>php artisan ghost:laravel-uploads-clean --dry-run</code></pre>
+      </section>
+
+      <section id="route-serving" data-title="Route & Serving Mechanics">
+        <h2>Route & Serving Mechanics</h2>
+        <p>Files are served securely through the dynamic endpoint:</p>
+        <div class="endpoint-badge"><span class="method get">GET</span> <code>/_laravel-uploads/file/{token}</code></div>
+        
+        <h3>Routing Options</h3>
+        <p>Modify route attributes inside <code>config/laravel-uploads.php</code>:</p>
+        <ul>
+          <li><code>route.prefix</code>: Customize the serving prefix (default <code>'_laravel-uploads'</code>).</li>
+          <li><code>route.name</code>: Customize the route name (default <code>'laravel-uploads.show'</code>).</li>
+          <li><code>route.middleware</code>: Apply middleware checks (e.g., <code>'auth'</code>) to restrict file access to authenticated sessions.</li>
+        </ul>
+
+        <h3>Download Control</h3>
+        <p>Force download disposition on previewable file types (PDFs, images) by appending the query parameter:</p>
+        <pre><code>GET /_laravel-uploads/file/{token}?download=1</code></pre>
+      </section>
+
+      <section id="security-defaults" data-title="Security Defaults">
+        <h2>Security Defaults</h2>
+        <p>The package implements multiple default security standards:</p>
+        <ul>
+          <li><strong>Traversal Prevention:</strong> Path segments containing directory modifications (<code>..</code>, <code>.</code>) are parsed and blocked immediately to prevent directory escaping.</li>
+          <li><strong>File Type Constraints:</strong> PHP files and scripts are restricted globally via the <code>never_allowed_extensions</code> list, preventing remote code execution (RCE).</li>
+          <li><strong>SVG Sanitization:</strong> Image files matching <code>image/svg+xml</code> are blocked from rendering inline. SVG requests are always forced to download as attachments to prevent stored Cross-Site Scripting (XSS).</li>
+        </ul>
+      </section>
+
+    </main>
+
+    <div class="docs-toc-col">
+      <div class="toc-sticky">
+        <p class="toc-title">On This Page</p>
+        <div id="toc" class="on-this-page"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

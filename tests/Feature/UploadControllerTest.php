@@ -286,4 +286,37 @@ class UploadControllerTest extends TestCase
         $this->get(route('laravel-uploads.show', ['token' => $link->token]))
             ->assertNotFound();
     }
+
+    public function test_it_proxies_url_uploads_directly(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://example.com/some-image.png' => \Illuminate\Support\Facades\Http::response('image data from remote', 200, [
+                'Content-Type' => 'image/png',
+            ]),
+        ]);
+
+        $upload = Upload::query()->create([
+            'disk' => 'url',
+            'visibility' => 'private',
+            'path' => 'https://example.com/some-image.png',
+            'original_name' => 'some-image.png',
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => 22,
+            'metadata' => ['is_url' => true],
+        ]);
+
+        $link = UploadLink::query()->create([
+            'upload_id' => $upload->id,
+            'token' => str_repeat('z', 64),
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        $response = $this->get(route('laravel-uploads.show', ['token' => $link->token]));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'image/png');
+        $response->assertHeader('x-content-type-options', 'nosniff');
+        $this->assertSame('image data from remote', $response->streamedContent());
+    }
 }

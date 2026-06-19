@@ -552,6 +552,49 @@ class LaravelUploadsManagerTest extends TestCase
             UploadedFile::fake()->image('avatar.png', 11, 10)
         );
     }
+
+    public function test_it_stores_url_directly_without_downloading_at_upload(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Http::fake([
+            'https://example.com/avatar.png' => \Illuminate\Support\Facades\Http::response('fake image content', 200, [
+                'Content-Type' => 'image/png',
+                'Content-Length' => '18',
+            ]),
+        ]);
+
+        $upload = app(LaravelUploadsManager::class)->upload(
+            'https://example.com/avatar.png'
+        );
+
+        $this->assertInstanceOf(Upload::class, $upload);
+        $this->assertSame('url', $upload->disk);
+        $this->assertSame('https://example.com/avatar.png', $upload->path);
+        $this->assertSame('avatar.png', $upload->original_name);
+        $this->assertSame('image/png', $upload->mime_type);
+        $this->assertSame('png', $upload->extension);
+        $this->assertSame(18, $upload->size);
+        $this->assertTrue($upload->metadata['is_url']);
+
+        Storage::disk('local')->assertDirectoryEmpty('');
+    }
+
+    public function test_it_can_remove_url_upload(): void
+    {
+        $upload = Upload::query()->create([
+            'disk' => 'url',
+            'visibility' => 'private',
+            'path' => 'https://example.com/avatar.png',
+            'original_name' => 'avatar.png',
+            'mime_type' => 'image/png',
+            'extension' => 'png',
+            'size' => 18,
+            'metadata' => ['is_url' => true],
+        ]);
+
+        $this->assertTrue(app(LaravelUploadsManager::class)->remove($upload->id));
+        $this->assertDatabaseMissing('laravel_uploads_uploads', ['id' => $upload->id]);
+    }
 }
 
 class TenantPublicUrlResolver

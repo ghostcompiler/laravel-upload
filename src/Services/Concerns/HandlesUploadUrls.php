@@ -20,7 +20,7 @@ trait HandlesUploadUrls
             return null;
         }
 
-        if ($upload->visibility === 'public') {
+        if ($upload->visibility === 'public' && $upload->disk !== 'url') {
             return $this->publicUrlForUpload($upload);
         }
 
@@ -108,11 +108,14 @@ trait HandlesUploadUrls
     protected function createLink(Upload $upload, ?int $expiry = null): UploadLink
     {
         $minutes = $this->resolveLinkExpiryMinutes($expiry);
+        $expiresAt = ($upload->disk === 'url' && $upload->visibility === 'public')
+            ? null
+            : now()->addMinutes($minutes);
 
         return UploadLink::query()->create([
             'upload_id' => $upload->id,
             'token' => Str::random(64),
-            'expires_at' => now()->addMinutes($minutes),
+            'expires_at' => $expiresAt,
         ]);
     }
 

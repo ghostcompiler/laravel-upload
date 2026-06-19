@@ -64,6 +64,10 @@ trait HandlesStoragePaths
 
     public function isSafeUpload(Upload $upload, ?FilesystemAdapter $disk = null): bool
     {
+        if ($upload->disk === 'url') {
+            return filter_var($upload->path, FILTER_VALIDATE_URL) !== false;
+        }
+
         $disk ??= Storage::disk($upload->disk);
 
         return $this->isSafeStoragePath($upload->path)

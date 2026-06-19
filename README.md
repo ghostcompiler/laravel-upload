@@ -13,9 +13,13 @@
     <img src="https://img.shields.io/packagist/dt/ghostcompiler/laravel-uploads?style=for-the-badge&logo=packagist" />
 </p>
 
-Laravel Uploads stores files through Laravel Storage, tracks upload metadata, generates secure private file URLs, supports public disk URLs, integrates with Eloquent models, and can optionally optimize browser images.
+Laravel Uploads manages local/cloud file storage, tracks upload metadata, generates secure tokenized preview URLs, integrates with Eloquent models, and supports real-time image optimization. It also features **on-demand proxy streaming** for remote URLs with zero local disk footprint.
 
-## Install
+---
+
+## Installation
+
+Install the package via Composer:
 
 ```bash
 composer require ghostcompiler/laravel-uploads
@@ -23,259 +27,49 @@ php artisan install:laravel-uploads
 php artisan migrate
 ```
 
-Use `--force` to overwrite already-published config or migration files:
+Use `--force` to overwrite any existing assets:
 
 ```bash
 php artisan install:laravel-uploads --force
 ```
 
-By default, files are stored under `LaravelUploads` on the configured disk.
+---
 
-## Basic Upload
+## Basic Usage
+
+### Uploading a File
 
 ```php
 use GhostCompiler\LaravelUploads\Facades\Uploads;
 
+// Store a file under configured defaults
 $upload = Uploads::upload($request->file('avatar'));
 
+// Store to a specific directory inside the storage path
 $upload = Uploads::upload('avatars', $request->file('avatar'));
 ```
 
-Store the upload ID on your model:
+### Uploading from a URL (Dynamic Proxy Streaming)
+
+You can pass a remote URL string directly. The package will register the reference in the database, proxying it on-demand to hide the source URL and bypass local disk storage:
 
 ```php
-$user->avatar_id = $upload->id;
-$user->save();
+$upload = Uploads::upload('https://avatar.example.com/user123.jpg');
 ```
 
-Delete an upload:
+### Resolving Secure URLs
+
+Retrieve secure tokenized URLs to stream or preview private files:
 
 ```php
-Uploads::remove($user->avatar_id);
+// Generates a secure routing URL expiring in 15 minutes
+$url = Uploads::url($upload, 15);
 ```
 
-The helper uses the same service:
+---
 
-```php
-$upload = GhostCompiler()->upload('avatars', $request->file('avatar'));
-```
+## Full Documentation
 
-## Model URLs
+For detailed guides on configuration settings, Eloquent trait integrations, custom URL resolvers, image optimization pipelines, and Artisan commands, see the:
 
-Add upload ID columns such as `avatar_id`, `document_id`, or `favicon_id` to your own models.
-
-```php
-use GhostCompiler\LaravelUploads\Concerns\LaravelUploads;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-
-class User extends Authenticatable
-{
-    use LaravelUploads;
-
-    protected $uploadable = [
-        'avatar_id' => [
-            'name' => 'avatar',
-            'id' => 'hide',
-            'expiry' => 60,
-        ],
-    ];
-}
-```
-
-Now `$user->avatar` returns the file URL. In array or JSON responses, URL fields are included by default. Set `expose => false` on a field when you do not want that URL serialized.
-
-Customize returned values when needed:
-
-```php
-public function setUploadableValue($value, string $column, array $options)
-{
-    if ($column === 'avatar_id') {
-        return $value;
-    }
-
-    return [
-        'url' => $value,
-        'name' => $options['name'],
-    ];
-}
-```
-
-You can also define field-specific hooks when a model has multiple uploadable fields:
-
-```php
-public function setAvatarUploadableValue($value)
-{
-    return $value;
-}
-
-public function setResumeUploadableValue($value)
-{
-    return [
-        'url' => $value,
-        'type' => 'resume',
-    ];
-}
-```
-
-Use `$user->avatar` for direct access. Use `$user->toArray()` or API responses when you want the configured uploadable URL fields serialized.
-
-## Public And Private URLs
-
-Private uploads generate package URLs like:
-
-```text
-https://your-app.test/_laravel-uploads/file/{token}
-```
-
-Public uploads return the disk URL directly and do not create or regenerate `laravel_uploads_links` rows:
-
-```php
-$upload = Uploads::upload('avatars', $request->file('avatar'), [
-    'visibility' => 'public',
-]);
-```
-
-For multi-tenant apps where each tenant has a different domain, register a public URL resolver:
-
-```php
-use GhostCompiler\LaravelUploads\Facades\Uploads;
-
-public function boot(): void
-{
-    Uploads::resolvePublicUrlsUsing(function ($upload, $disk, $path) {
-        $tenant = tenant();
-
-        return "https://{$tenant->domain}/storage/{$path}";
-    });
-}
-```
-
-You can also configure a resolver class:
-
-```php
-'urls' => [
-    'public_resolver' => App\Support\TenantUploadUrlResolver::class,
-],
-```
-
-```php
-class TenantUploadUrlResolver
-{
-    public function publicUrl($upload, $disk, string $path): string
-    {
-        return 'https://'.tenant()->domain.'/storage/'.$path;
-    }
-}
-```
-
-Force a private file download with `?download=1`.
-
-## Favicon Uploads
-
-Use the normal upload API and pass `favicon` only when the upload should be treated as a favicon:
-
-```php
-$upload = Uploads::upload('favicons', $request->file('favicon'), [
-    'favicon' => true,
-]);
-```
-
-Existing `.ico` files are stored without conversion. JPEG, PNG, and WEBP uploads are converted into a square favicon PNG.
-
-## Other Useful APIs
-
-Upload multiple files:
-
-```php
-$uploads = Uploads::uploadMany($request->file('documents'), 'documents');
-```
-
-Allow specific excluded extensions only when you explicitly need it:
-
-```php
-$upload = Uploads::upload($request->file('script'), ['sh', 'rb']);
-```
-
-Critical extensions in `validation.never_allowed_extensions`, such as `php`, `phar`, and `phtml`, cannot be allowed with this override.
-
-Clean expired private URL tokens:
-
-```bash
-php artisan ghost:laravel-uploads-clean
-php artisan ghost:laravel-uploads-clean --dry-run
-```
-
-## Image Optimization
-
-Image optimization is disabled by default.
-
-```php
-'image_optimization' => [
-    'enabled' => true,
-    'strict' => false,
-    'quality' => 75,
-    'convert_to_avif' => true,
-    'max_width' => 1600,
-    'max_height' => null,
-]
-```
-
-When enabled, supported JPEG, PNG, and WEBP uploads try AVIF first and fall back to WEBP. Resizing preserves aspect ratio and never upscales.
-
-## Configuration
-
-Important config keys:
-
-- `disk`: Laravel disk used for storage.
-- `base_path`: base folder inside the disk.
-- `defaults.visibility`: default `private` or `public` visibility.
-- `defaults.expiry`: private URL expiry in minutes.
-- `defaults.expose`: whether model serialization appends URL fields by default.
-- `cache.enabled`: reuse private generated URLs until expiry.
-- `cache.registry_ttl`: minutes to keep the internal cache-key registry used for deleting cached private URLs. Defaults to `60`.
-- `validation.max_size`: max upload size in bytes.
-- `validation.allowed_mime_types`: optional server-detected MIME allowlist.
-- `validation.allowed_extensions`: optional extension allowlist.
-- `validation.excluded_mime_types`: blocked MIME types.
-- `validation.excluded_extensions`: blocked extensions.
-- `validation.never_allowed_extensions`: critical extensions that cannot be overridden.
-- `image_optimization.*`: image conversion and resize limits.
-- `favicon.size`: favicon output size.
-- `downloads.use_original_name`: use original filename in download headers.
-- `urls.public_resolver`: optional tenant/CDN resolver for public upload URLs.
-- `preview_mime_types`: MIME types allowed to open inline.
-- `delete_files_with_model`: delete stored files when the model is deleted.
-- `route.*`: package file-serving route settings. `route.middleware` defaults to `[]` so app `web` middleware cannot redirect image/file requests.
-
-Full local development, path repository, validation, and security notes live in [DEVELOPER.md](DEVELOPER.md).
-
-Release history is documented in [CHANGELOG.md](CHANGELOG.md).
-
-## Security Defaults
-
-- Upload paths are normalized and reject traversal such as `..`.
-- MIME validation uses server-side detection.
-- SVG is downloaded by default instead of previewed inline.
-- Model URL exposure is enabled by default and can be disabled with `expose => false`.
-- Public uploads use the disk URL directly.
-- Private uploads use expiring package tokens.
-
-## Development And Build Environment
-
-This package was developed using **ServBay** as the local development environment.
-
-### Development Tool Used
-
-- Local development tool: `ServBay`
-- Website: [www.servbay.com](https://www.servbay.com/)
-
-### ServBay your development friend
-
-<p>
-  <img src="https://res.cloudinary.com/djgvfl1tv/image/upload/v1780667063/servbay_edc7jz.png" alt="ServBay Icon" width="96">
-</p>
-
-### Testing And Build Machine
-
-- Tested on: `Mac M4`
-- Built on: `Mac M4`
+👉 **[Laravel Uploads Documentation](https://ghostcompiler.github.io/laravel-upload/)**

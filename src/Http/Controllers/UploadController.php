@@ -31,6 +31,35 @@ class UploadController extends Controller
         $manager = app(LaravelUploadsManager::class);
         abort_if(! $manager->isSafeUpload($upload), 404);
 
+        if ($upload->disk === 'url') {
+            $downloadName = $this->safeDownloadName($this->downloadNameForUpload($upload));
+            $headers = $this->securityHeaders();
+            $download = $request->boolean('download');
+            $previewable = $this->isPreviewable($upload->mime_type);
+            $disposition = ($download || ! $previewable) ? 'attachment' : 'inline';
+
+            $headers['Content-Type'] ??= $upload->mime_type ?: 'application/octet-stream';
+            $headers['Content-Disposition'] ??= $disposition.'; filename="'.$downloadName.'"';
+
+            return response()->stream(function () use ($upload): void {
+                try {
+                    $response = \Illuminate\Support\Facades\Http::timeout(15)->send('GET', $upload->path, [
+                        'stream' => true,
+                    ]);
+                    if ($response->successful()) {
+                        $body = $response->toPsrResponse()->getBody();
+                        while (! $body->eof()) {
+                            echo $body->read(8192);
+                        }
+                    } else {
+                        throw new \RuntimeException('Unable to stream the requested remote upload.');
+                    }
+                } catch (\Throwable $e) {
+                    throw new \RuntimeException('Unable to stream the requested remote upload: '.$e->getMessage());
+                }
+            }, 200, $headers);
+        }
+
         $disk = Storage::disk($upload->disk);
         abort_if(! $disk->exists($upload->path), 404);
 
