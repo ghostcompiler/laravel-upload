@@ -73,3 +73,23 @@ $url = Uploads::url($upload, 15);
 For detailed guides on configuration settings, Eloquent trait integrations, custom URL resolvers, image optimization pipelines, and Artisan commands, see the:
 
 👉 **[Laravel Uploads Documentation](https://ghostcompiler.github.io/laravel-upload/)**
+
+## Development And Build Environment
+
+This package was developed using **ServBay** as the local development environment.
+
+### Development Tool Used
+
+- Local development tool: `ServBay`
+- Website: [www.servbay.com](https://www.servbay.com/)
+
+### ServBay your development friend
+
+<p>
+  <img src="https://res.cloudinary.com/djgvfl1tv/image/upload/v1780667063/servbay_edc7jz.png" alt="ServBay Icon" width="96">
+</p>
+
+### Testing And Build Machine
+
+- Tested on: `Mac M4`
+- Built on: `Mac M4`
